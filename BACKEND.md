@@ -1,6 +1,6 @@
-# 13 Backend Tricks: What production would reward.
+# 12 Backend Tricks: What production would reward.
 
-### These 13 solid alterations and mindset are the ones that separate a system that survives "Black Friday" from one that takes the company down with it.
+### These 12 solid alterations and mindset are the ones that separate a system that survives "Black Friday" from one that takes the company down with it.
 None are "clever". They’re habits that *look* like overhead, until they save you at 3am.
 
 ## 1. Send less - Always send less.
