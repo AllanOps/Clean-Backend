@@ -245,4 +245,4 @@ users
 ```
 
 The compiler doesn't care. A teammate, maintainer, or even myself later at a 3am debugging session or maintenance does.
-**Renaming is the chapest, high-leverage rewrite we'd ever ship.**
+**Renaming is the cheapest, high-leverage rewrite we'd ever ship.**
