@@ -1,3 +1,8 @@
+---
+name: Backend skill
+description: 12 backend tricks that production would reward.
+---
+
 # 12 Backend Tricks: What production would reward.
 
 ### These 12 solid alterations and mindset are the ones that separate a system that survives "Black Friday" from one that takes the company down with it.
