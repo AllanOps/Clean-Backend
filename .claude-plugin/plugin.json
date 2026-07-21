@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "clean-backend",
+  "version": "0.0.0",
+  "description": "Backend practices that look like overhead until they save you at 3am — timeouts, idempotency keys, soft deletes, business-metric alerts, and more.",
+  "author": {
+    "name": "AllanOps",
+    "url": "https://github.com/AllanOps"
+  },
+  "homepage": "https://github.com/AllanOps/Clean-Backend",
+  "repository": "https://github.com/AllanOps/Clean-Backend",
+  "license": "MIT",
+  "keywords": [
+    "backend",
+    "api-design",
+    "reliability",
+    "production",
+    "best-practices",
+    "claude-code",
+    "skills"
+  ]
+}

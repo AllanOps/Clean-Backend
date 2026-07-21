@@ -1,0 +1,22 @@
+{
+  "name": "allanops",
+  "owner": {
+    "name": "AllanOps",
+    "url": "https://github.com/AllanOps"
+  },
+  "description": "AllanOps' Claude Code plugins — starting with clean-backend: production backend practices in trap-vs-fix format.",
+  "plugins": [
+    {
+      "name": "clean-backend",
+      "source": "./",
+      "description": "Backend practices that look like overhead until they save you at 3am — timeouts, idempotency keys, soft deletes, business-metric alerts, and more.",
+      "category": "engineering",
+      "keywords": [
+        "backend",
+        "reliability",
+        "production",
+        "best-practices"
+      ]
+    }
+  ]
+}
