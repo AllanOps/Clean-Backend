@@ -1,12 +1,12 @@
 ---
-name: Backend skill
-description: 12 backend tricks that production would reward.
+name: clean-backend
+description: Production-backend practices with trap-vs-fix code examples — field-limited responses, timeouts on all I/O, idempotency keys, validation at the door, feature flags, async heavy work, internal rate limits, API versioning, soft deletes, business-metric alerting, graceful degradation, naming. Use when designing, writing, or reviewing backend endpoints, APIs, payment flows, deletes, background jobs, or alerting.
+license: MIT
 ---
 
-# 12 Backend Tricks: What production would reward.
+# Backend Practices Production Rewards
 
-### These 12 solid alterations and mindset are the ones that separate a system that survives "Black Friday" from one that takes the company down with it.
-They are not "clever". They’re habits that *look* like overhead, until they save you at 3am.
+The habits that separate a service which survives its busiest day from one that takes the company down with it. None are clever. Each looks like overhead in review — until it saves you during an incident.
 
 ## 1. Send less - Always send less.
 ### Send less data than you think
@@ -127,7 +127,7 @@ queue.enqueue('invoice.render', {
 res.send({ status: queued });
 ```
 
-**Anything the user doesn't need in a milisecond goes to a worker.**
+**Anything the user doesn't need in a millisecond goes to a worker.**
 Email. PDFs. Webhooks. Image work. Search indexing. All async.
 
 ## 7. Rate-limit users. Then rate-limit yourselves.
@@ -204,7 +204,7 @@ cpu_percent, memory_percent, disk_io
 
 // The Fix - Alert on user behavior
 orders_per_minute < 0.5 * baseline
-checkout_failiures_per_minute > 5
+checkout_failures_per_minute > 5
 logins_per_minute drop > 30%
 ```
 

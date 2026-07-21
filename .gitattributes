@@ -1,0 +1,9 @@
+# Normalize line endings to LF in the repository.
+# This repo is maintained from Windows; the CI content scanner and link
+# checker operate on bytes, so CRLF/BOM drift must never reach the remote.
+* text=auto eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.jsonc text eol=lf
+*.yml text eol=lf
+*.mjs text eol=lf
