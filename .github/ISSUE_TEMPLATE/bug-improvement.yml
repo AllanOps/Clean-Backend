@@ -1,0 +1,37 @@
+name: Bug or improvement
+description: Report a typo, wrong code, or suggest a sharper wording for an existing trick or the repo.
+title: "fix: <short description>"
+labels: ["improvement"]
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which trick (or repo area)?
+      options:
+        - "1 — Send less"
+        - "2 — Timeouts on every I/O"
+        - "3 — Idempotency keys"
+        - "4 — Validate at the door"
+        - "5 — Feature flags"
+        - "6 — Async heavy work"
+        - "7 — Rate limits + breakers"
+        - "8 — API versioning"
+        - "9 — Soft delete"
+        - "10 — Business-metric alerts"
+        - "11 — Plan the failure"
+        - "12 — Names beat comments"
+        - "Repo / docs / CI"
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What's wrong, or what would improve it?
+    validations:
+      required: true
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested wording or fix (optional)
+    validations:
+      required: false

@@ -1,0 +1,57 @@
+name: Actions Security
+
+# Audits the workflows themselves. zizmor is a security auditor (template
+# injection, unpinned actions, credential leaks); actionlint is a correctness
+# linter (YAML, expressions, shellcheck of `run:` blocks) — they don't overlap.
+#
+# Both jobs run with only `contents: read` so they behave identically on
+# same-repo and fork PRs. Findings fail the job and print to the log; we trade
+# the code-scanning SARIF integration for uniform fork-safety.
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/**"
+      - "release-please-config.json"
+      - ".release-please-manifest.json"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/**"
+  schedule:
+    - cron: "0 5 1 * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: actions-security-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  zizmor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: zizmorcore/zizmor-action@6599ee8b7a49aef6a770f63d261d214911a7ce02 # v0.6.0
+        with:
+          advanced-security: false
+
+  actionlint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: reviewdog/action-actionlint@01d2dd67e3525e5a0ce72e8fa38e5a3ab65e2ded # v1.72.1
+        with:
+          reporter: local
+          fail_on_error: true
