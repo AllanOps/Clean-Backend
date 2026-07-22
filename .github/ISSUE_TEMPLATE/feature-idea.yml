@@ -1,0 +1,33 @@
+name: Feature or new skill idea
+description: Propose a new capability, or a whole new skill for the collection (e.g. a /backend-audit skill).
+title: "feat: <short description>"
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for new capabilities or new skills. To add a single trick to
+        the existing clean-backend skill, use the "New backend trick" template
+        instead.
+  - type: textarea
+    id: idea
+    attributes:
+      label: What's the idea?
+      description: What should it do, and what problem does it solve?
+      placeholder: "A /backend-audit skill that reviews an existing backend against the tricks and reports where it falls short."
+    validations:
+      required: true
+  - type: textarea
+    id: shape
+    attributes:
+      label: Rough shape (optional)
+      description: How might it work — inputs, outputs, an example invocation?
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: This isn't already covered by an existing skill or an open issue
+          required: true
