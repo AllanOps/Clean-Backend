@@ -1,0 +1,31 @@
+name: External Links
+
+# External link rot surfaces as a red scheduled run (the maintainer is
+# notified), and never blocks a contributor's PR. Internal links and anchors
+# are checked on every PR by ci.yml instead.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: links-external
+  cancel-in-progress: true
+
+jobs:
+  links:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check external links
+        uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
+        with:
+          args: "--include-fragments '**/*.md'"
+          fail: true

@@ -1,0 +1,58 @@
+name: New backend trick
+description: Propose a new production-backend practice for the skill.
+title: "trick: <one-line law>"
+labels: ["new-trick"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for proposing a trick! Please skim the trap-vs-fix format in
+        [CONTRIBUTING.md](https://github.com/AllanOps/Clean-Backend/blob/main/CONTRIBUTING.md)
+        first, and propose it here **before** opening a PR so we can agree on scope.
+  - type: input
+    id: law
+    attributes:
+      label: The law (one punchy line)
+      description: The bold, imperative one-liner the trick lands on.
+      placeholder: "Anywhere money or state moves, charge a key."
+    validations:
+      required: true
+  - type: textarea
+    id: trap
+    attributes:
+      label: The Trap — what people naturally do
+      description: The common mistake. A short code sample helps.
+      placeholder: |
+        // The Trap - retry charges twice
+        POST /charges { amount: 4900 }
+    validations:
+      required: true
+  - type: textarea
+    id: fix
+    attributes:
+      label: The Fix — the practice
+      description: The habit that fixes it. A short code sample helps.
+      placeholder: |
+        // The Fix - stable key, server dedupes
+        if (seen(key)) return cached(key);
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why production rewards it
+      description: What real-world pain does this prevent?
+      placeholder: "Refresh, retry, network blip — the user's intent was one charge."
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: This follows the trap-vs-fix format in CONTRIBUTING.md
+          required: true
+        - label: It doesn't duplicate one of the existing tricks
+          required: true
+        - label: I'm willing to license this contribution under MIT
+          required: true
