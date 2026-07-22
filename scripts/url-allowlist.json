@@ -1,0 +1,4 @@
+{
+  "comment": "Prefixes of external URLs permitted inside skills/. Ships empty on purpose: adding any link to skill content requires a reviewed entry here plus a justification in the PR. See CONTRIBUTING.md and SECURITY.md.",
+  "allowed": []
+}

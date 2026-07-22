@@ -1,0 +1,15 @@
+{
+  // House-style exemptions for Clean-Backend. The skill is deliberately dense
+  // (tight "## law" / "### subtitle" pairs, laws that end in a period,
+  // standalone bold one-liners), and the README leans on HTML for the banner
+  // and centered header. Each disabled rule is an intentional style choice,
+  // not a shortcut — the structural and link checks stay on.
+  "default": true,
+  "MD013": false, // line length: prose and code samples run long by design
+  "MD022": false, // blanks around headings: the law/subtitle pairs sit tight
+  "MD026": false, // trailing punctuation in headings: the laws end with "."
+  "MD031": false, // blanks around fences: the consequence line hugs the code
+  "MD033": false, // inline HTML: banner <img>, <div align>, centered header
+  "MD036": false, // emphasis as heading: the bold one-line laws
+  "MD041": false  // first-line heading: frontmatter / banner precede the H1
+}
