@@ -27,5 +27,8 @@ jobs:
       - name: Check external links
         uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
         with:
-          args: "--include-fragments '**/*.md'"
+          # Self-referential badge/action URLs 404 until the workflows and first
+          # release land on the default branch; exclude them so a fresh repo
+          # doesn't report itself as broken. 429 = rate-limited, not dead.
+          args: "--include-fragments --accept '200..=299,429' --exclude 'https://github.com/AllanOps/Clean-Backend/(actions|releases)' --exclude 'https://img.shields.io/github/v/release/' '**/*.md'"
           fail: true

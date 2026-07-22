@@ -6,6 +6,10 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # Wait a week after a release before bumping, so we never adopt a
+    # freshly-published (possibly compromised) action tag on day zero.
+    cooldown:
+      default-days: 7
     groups:
       actions:
         patterns: ["*"]
