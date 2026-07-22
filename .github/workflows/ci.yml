@@ -42,8 +42,12 @@ jobs:
           node-version: "22"
       - name: Structural + schema validation
         run: node scripts/validate-repo.mjs
+      # The official Anthropic CLI, installed only to run its manifest
+      # validators below. zizmor flags any non-lockfile install; this one is a
+      # trusted first-party tool, and adding a package.json purely for it would
+      # pull an npm dependency tree into an otherwise zero-dependency repo.
       - name: Install Claude Code CLI
-        run: npm install -g @anthropic-ai/claude-code
+        run: npm install -g @anthropic-ai/claude-code # zizmor: ignore[adhoc-packages]
       - name: Validate plugin manifest
         run: claude plugin validate .claude-plugin/plugin.json --strict
       - name: Validate marketplace manifest
