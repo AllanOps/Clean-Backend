@@ -13,9 +13,11 @@
 // scan. The invisible-Unicode and raw-IP checks run repo-wide.
 
 import { readFileSync, readdirSync } from 'node:fs';
-import { join, relative, sep, extname } from 'node:path';
+import { join, relative, sep, extname, resolve } from 'node:path';
 
-const root = process.cwd();
+// Root defaults to the current repo; an explicit arg lets the test harness
+// point the scanner at a throwaway fixture directory.
+const root = process.argv[2] ? resolve(process.argv[2]) : process.cwd();
 const findings = [];
 const add = (level, file, line, msg) => findings.push({ level, file, line, msg });
 
@@ -59,6 +61,17 @@ const URL_RE = /\bhttps?:\/\/[^\s)"'`\]]+/gi;
 
 // HTML comment containing an imperative verb — skills/** only, WARN.
 const HTML_COMMENT_IMPERATIVE = /<!--[\s\S]*?\b(ignore|execute|fetch|run)\b[\s\S]*?-->/i;
+
+// Scripts for homoglyph detection — skills/** only. Legit English skill content
+// is single-script per word; a word that mixes Latin with Cyrillic/Greek/etc.
+// is a confusable attack (e.g. "pаypal" where the "а" is Cyrillic U+0430).
+const SCRIPTS = [
+  ['Latin', /\p{Script=Latin}/u],
+  ['Cyrillic', /\p{Script=Cyrillic}/u],
+  ['Greek', /\p{Script=Greek}/u],
+  ['Armenian', /\p{Script=Armenian}/u],
+  ['Hebrew', /\p{Script=Hebrew}/u],
+];
 
 let allowed = [];
 try {
@@ -119,6 +132,20 @@ for (const abs of walk(root)) {
     const url = m[0];
     if (!allowed.some((prefix) => url.startsWith(prefix))) {
       add('FAIL', rel, lineOf(text, m.index), `external URL not in url-allowlist.json: ${url}`);
+    }
+  }
+
+  // Homoglyph / mixed-script words: any single word drawing letters from two
+  // different scripts is almost certainly a lookalike-character attack.
+  for (const m of text.matchAll(/\p{L}+/gu)) {
+    const scripts = new Set();
+    for (const ch of m[0]) {
+      for (const [name, re] of SCRIPTS) {
+        if (re.test(ch)) { scripts.add(name); break; }
+      }
+    }
+    if (scripts.size > 1) {
+      add('FAIL', rel, lineOf(text, m.index), `mixed-script word "${m[0]}" (possible homoglyph): ${[...scripts].join('+')}`);
     }
   }
 }
