@@ -1,0 +1,15 @@
+# Link-checker config. CI runs lychee twice:
+#   - ci.yml (every PR):    --offline, internal links + anchors only, blocking.
+#   - links-external.yml:   weekly external check, non-blocking to contributors.
+include_fragments = true
+max_retries = 2
+accept = ["200..=206", "429"]
+
+# Self-referential badge and action URLs 404 until the first workflow run and
+# first release exist; exclude them from the external check so a fresh repo
+# doesn't report itself as broken.
+exclude = [
+  "^https://github\\.com/AllanOps/Clean-Backend/actions",
+  "^https://github\\.com/AllanOps/Clean-Backend/releases",
+  "^https://img\\.shields\\.io/github/v/release/",
+]
