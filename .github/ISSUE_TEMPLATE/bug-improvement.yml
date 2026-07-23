@@ -1,25 +1,21 @@
 name: Bug or improvement
-description: Report a typo, wrong code, or suggest a sharper wording for an existing trick or the repo.
+description: Report a typo, wrong code, or suggest a sharper wording for an existing habit or the repo.
 title: "fix: <short description>"
 labels: ["improvement"]
 body:
   - type: dropdown
     id: area
     attributes:
-      label: Which trick (or repo area)?
+      label: Which habit (or repo area)?
       options:
-        - "1 — Send less"
-        - "2 — Timeouts on every I/O"
-        - "3 — Idempotency keys"
-        - "4 — Validate at the door"
-        - "5 — Feature flags"
-        - "6 — Async heavy work"
-        - "7 — Rate limits + breakers"
-        - "8 — API versioning"
-        - "9 — Soft delete"
-        - "10 — Business-metric alerts"
-        - "11 — Plan the failure"
-        - "12 — Names beat comments"
+        - "1 — Version the route from day one"
+        - "2 — Deploying is not releasing"
+        - "3 — Break the circuit before you retry"
+        - "4 — Every I/O gets a deadline"
+        - "5 — Get it off the request path"
+        - "6 — Emit the counter, not just the log line"
+        - "7 — Every read filters tombstones"
+        - "Evaluation protocol / evidence"
         - "Repo / docs / CI"
     validations:
       required: true

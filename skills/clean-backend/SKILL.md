@@ -1,253 +1,140 @@
 ---
 name: clean-backend
-description: Production-backend practices with trap-vs-fix code examples — field-limited responses, timeouts on all I/O, idempotency keys, validation at the door, feature flags, async heavy work, internal rate limits, API versioning, soft deletes, business-metric alerting, graceful degradation, naming. Use when designing, writing, or reviewing backend endpoints, APIs, payment flows, deletes, background jobs, or alerting.
+description: Use when designing, writing, or reviewing backend code — HTTP endpoints, payment or state-changing flows, database reads and writes, calls to other services, background jobs, rolling out a risky change, or production alerting and on-call.
 license: MIT
 ---
 
-# Backend Practices Production Rewards
+# Clean Backend
 
-The habits that separate a service which survives its busiest day from one that takes the company down with it. None are clever. Each looks like overhead in review — until it saves you during an incident.
+The operational habits that don't surface from inside the code in front of you.
 
-## 1. Send less - Always send less.
-### Send less data than you think
+Every practice here was measured missing from real baseline output. The practices
+that showed up reliably without prompting were removed — see *Deliberately not
+covered* at the end. Apply these **in addition to** your own engineering judgment;
+they are a floor to add, not a checklist that replaces what you already do well.
 
-For instance;
+## Part 1 — Absent from every baseline
 
-```TypeScript
-// The Trap - Return the whole row
-GET /users/:id
-{ id, name, email, createdAt, updatedAt, internalFlags, ... }
+Three lifecycle decisions. Nothing inside a single endpoint cues them, which is
+exactly why they get skipped.
 
-// The Fix - Pick fields per screen
-GET /users/:id?fields=id,name
-{ id: 1, name: 'John' }
-```
-Every byte is a second on a 3G phone.
-**Pick fields per endpoint, NOT per model.**
-
-## 2. Timeouts on HTTP are the easy half.
-### Timeouts on every I/O, not just HTTP
-
-For instance;
+### 1. Version the route from day one
 
 ```TypeScript
-// The Trap - Only one IO has a deadline
-fetch(url, {timeout: 5000});
-await db.query(sql); // Can hang
-await redis.get(key); // Can hang
-
-// The Fix - Wrap every boundary
-const t = (p, ms) => Promise.race([
-    p, sleep(ms).then(() => fail()),
-]);
-await t(db.query(sql), 800);
-```
-**Anything that crosses a process boundary can hang.**
-Wrap every I/O call. Default deadline, then loosen.
-
-## 3. Make the second click no-op, not a bug.
-### Idempotency keys anywhere money moves
-
-> [!IMPORTANT]
-> This is very important. The number one source of customer pain is "I clicked, but it didn't work, so I clicked again...
-> and now I got charged twice."
-
-For instance;
-
-```TypeScript
-// The Trap - Retry charges twice
-POST /charges { amount: 4900 }
-
-// The Fix - Stable key, server dedupes
+// Measured: the route ships unversioned, every time.
 POST /charges
-Idempotency-Key: 8f2c...-94d1
-if (seen(key)) return cached(key);
-return cache(key, charge(amount));
+GET  /products
+
+// Fill the version slot.
+POST /api/v1/charges
+GET  /api/v1/products
 ```
 
-Refresh, retry, network blip - the user's intent was one charge.
-**Anywhere money or state moves, charge a key.**
+Mobile clients outlive your refactors. An unversioned route turns the first
+breaking change into a coordinated migration.
 
-## 4. Reject early. Spare the database.
-### Validate at the door, not the database.
+**Skip it when** the service has exactly one consumer that you deploy atomically
+with it.
 
-For instance;
+### 2. Deploying is not releasing
 
 ```TypeScript
-// The Trap - DB rejects bad input
-async function createOrder(req) {
-    await db.insert('orders', req.body);
-}
+// Measured: the new path ships live to everyone at once.
+return renderCheckoutV2(cart);
 
-// The Fix - Door rejects bad input
-function createOrder(req, res) {
-    if (!req.body.email) return 400;
-    if (!req.body.items) return 400;
-    return db.insert('orders', req.body);
-}
+// Put the risky path behind a switch you can flip without a deploy.
+if (flags.checkoutV2.on(user)) return renderCheckoutV2(cart);
+return renderCheckoutV1(cart);
 ```
 
-A bad request that reaches the database *is a tax that we pay forever*.
-**Schema-validate at the controller, not the table.**
+Rollback becomes a config change instead of an emergency deploy at 3am.
 
-## 5. Deploying is not the same as releasing.
-### Feature flags by default - even on side projects.
+**Skip it when** the change has no behavioral surface — a pure refactor or a typo
+fix. Flagging those only creates flag debt.
 
-For instance;
+### 3. Break the circuit before you retry
 
 ```TypeScript
-// The Trap - Deploy = Release for everyone
-return renderCheckoutV2();
+// Measured: bounded concurrency and retries appear; a breaker never does.
+while (!ok) await inventory.get(id);
 
-// The Fix - Flag-gated rollout
-if (flags.checkoutV2.on(user)) {
-    return renderCheckoutV2();
-}
-return renderCheckoutV1();
-// Rollback = Flip a switch, not a deploy
+// Fail fast once the dependency is known-sick.
+if (breaker.isOpen()) return fallback();
+if (!bucket.take())   return backoff();
+return inventory.get(id);
 ```
 
-Code live to nobody is safer than code rolled back to everyone.
-**Every risky path goes behind a flag.** Even on a side project.
+Retrying into a struggling dependency is how one slow service becomes two dead
+ones.
 
-## 6. If a request waits for it, it shouldn't.
-### Async the heavy work, receipts in 40ms beats 4s
+**Skip it when** the call has no downstream service. A breaker around your own
+primary database usually converts a slow query into an outage.
 
-For instance;
+## Part 2 — Present only when the task cues them
+
+You already reach for these when the task makes them obvious. The gap is the
+quiet case, so make them unconditional.
+
+### 4. Every I/O gets a deadline, including the database
 
 ```TypeScript
-// The Trap - User awaits 4 seconds
-await renderInvoicePDF(order);
-res.send('ok');
+// Measured: the scary external call gets a deadline; the database call doesn't.
+await withTimeout(paymentProvider.charge(order), 8_000);
+await db.charges.insert(row);              // unbounded
 
-// The Fix - Receipt in 40ms
-queue.enqueue('invoice.render', {
-    orderId,
-});
-res.send({ status: queued });
+// Both cross a process boundary. Both get one.
+await withTimeout(db.charges.insert(row), 800);
 ```
 
-**Anything the user doesn't need in a millisecond goes to a worker.**
-Email. PDFs. Webhooks. Image work. Search indexing. All async.
+The hung dependency that takes you down is the one nobody thought could hang.
 
-## 7. Rate-limit users. Then rate-limit yourselves.
-### Internal rate limits + circuit breakers
-
-For instance;
+### 5. Anything the caller doesn't await leaves the request path
 
 ```TypeScript
-// The Trap - Blind retry storm
-while (!ok) await serviceB.call();
+// Measured: the receipt email is awaited inline, on the user's latency budget.
+await mailer.sendReceipt(customerId, chargeId);
 
-// The Fix - Bucket + Circuit Breaker
-const lim = new Bucket({ rps: 200 });
-if (!lim.take())    return backoff();
-if (breaker.open()) return fallback();
-return await serviceB.call();
+// Hand it to a worker and return the receipt now.
+await queue.enqueue('receipt.send', { customerId, chargeId });
 ```
 
-One service flooding another is how a retry storm becomes an outage.
-**Internal calls deserve buckets and breakers, not blind retries.**
+Email, PDFs, webhooks, search indexing, thumbnails — none of it belongs in the
+response.
 
-## 8. Version the API from day one.
-### We will need /v2 sooner than we think.
-
-For instance;
+### 6. Emit the counter, not just the log line
 
 ```TypeScript
-// The Trap - Unversioned, breaks every client
-GET /api/users/:id
+// Measured: rich structured logs, and nothing you can alert on.
+log.error('charge.failed', { err });
 
-// The Fix - Version the URL from day one
-GET /api/v1/users/:id
-GET /api/v2/users/:id   // Breaking change
-
-// Or via a header
-Accept: application/vnd.acme.v2+json
+// A log is forensics after the fact. A counter is a page during it.
+log.error('charge.failed', { err });
+metrics.increment('charge.failed');
 ```
 
-Mobile apps live longer than your refactors.
-**Bake versioning into the route from day one.**
+Alert on charges per minute and checkout failures per minute, not CPU. Healthy
+servers happily serve a broken product.
 
-## 9. Soft delete, not DELETE.
-### Don't DELETE. Mark it gone.
-
-For instance;
+### 7. Every read filters tombstones
 
 ```SQL
--- The Trap - Bytes leave the building
-DELETE FROM users WHERE id = $1;
+-- Measured: the delete path tombstones correctly, then a read forgets.
+SELECT * FROM products WHERE active = true;      -- returns deleted rows
 
--- The Fix - Mark, don't remove
-ALTER TABLE users
-    ADD deleted_at TIMESTAMP NULL;
-
-UPDATE users SET deleted_at = NOW()
-    WHERE id = $1;
-
--- Reads ignore the tombstones
-WHERE deleted_at IS NULL
+-- The tombstone only means anything if every read respects it.
+SELECT * FROM products WHERE active = true AND deleted_at IS NULL;
 ```
 
-Audit trails. Mistake recovery. Support tickets six months later.
-**`DELETE` is forever. `deleted_at` is just a Tuesday afternoon.**
+Soft delete is a read-side discipline. Stamping `deleted_at` is the easy half.
 
-## 10. Alert on business metrics, not CPU.
-### CPU is fine. The business is on fire.
+**Skip it when** the read is an idempotency or audit lookup. A tombstoned row is
+still proof the key was spent; hiding it lets a retry charge the customer twice.
 
-For instance;
+## Deliberately not covered
 
-```TypeScript
-// The Trap - Only infra metrics
-cpu_percent, memory_percent, disk_io
-// Every dashboard green, alert silent
-
-// The Fix - Alert on user behavior
-orders_per_minute < 0.5 * baseline
-checkout_failures_per_minute > 5
-logins_per_minute drop > 30%
-```
-
-Healthy servers can serve a totally broken product.
-**Alert on what user does, NOT what the box does.**
-
-## 11. Plan the failure. Make it boring.
-
-For instance;
-
-```TypeScript
-// The Trap - Fail loud, fail user-facing
-return await payment.charge(order);
-// Throws -> User sees a stack trace
-
-// The Fix - Degrade gracefully
-try {
-    return await payment.charge(order);
-} catch (err) {
-    log.warn('charge.failed', err);
-    return queueRetry(order, '+5m');
-}
-```
-
-Retries with limits. Fallbacks with meaning. Degrade, *don't die*.
-**An outage handled gracefully is just a user inconvenience.**
-
-## 12. Names beat comments.
-### Names are the fastest refactor.
-
-For instance;
-
-```TypeScript
-// The Trap - Concise, unreadable next week
-const x = getData();
-x.filter(i => i.s).map(i => i.n);
-
-// The Fix - Names carry the meaning
-const users = getActiveUsers();
-users
-    .filter(u => u.unsubscribed)
-    .map(u => u.name);
-```
-
-The compiler doesn't care. A teammate, maintainer, or even myself later at a 3am debugging session or maintenance does.
-**Renaming is the cheapest, high-leverage rewrite we'd ever ship.**
+Field-limited responses, validation at the boundary, idempotency keys, graceful
+degradation, and intention-revealing naming are **not** in this skill. Each was
+measured across baseline runs and applied reliably without any prompting —
+including complete idempotency on money-moving endpoints in every single run.
+Carrying them here would spend your context restating what you already do, and
+crowd out the seven above.

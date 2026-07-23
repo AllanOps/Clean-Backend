@@ -1,80 +1,86 @@
 # Contributing to Clean-Backend
 
-Thanks for wanting to make this better. This repo is small and opinionated on purpose — every trick has to earn its place. This guide covers how to propose one, the exact format it must follow, and the checks it has to pass.
+Thanks for wanting to make this better. This skill is deliberately small, and it stays small because of one unusual rule — read that first.
+
+## The bar: evidence, not good advice
+
+**A habit ships here only if an AI assistant fails to apply it on its own.**
+
+Plenty of excellent backend practices are *not* in this skill. Input validation, idempotency keys, graceful degradation, intention-revealing naming — all good, all measured, all cut, because baseline runs applied them reliably with zero prompting. Every line we spend restating what the model already does crowds out the seven things it doesn't.
+
+So "this is a great practice" is not an argument for inclusion. The argument is: **here is output that omits it.** See [evals/](evals/README.md) for the protocol, the prompts, and the scorecard.
 
 ## Ways to contribute
 
-- **Propose a new trick** — a production-backend habit that belongs alongside the existing set.
-- **Fix or sharpen an existing trick** — a typo, wrong code, clearer wording, a better example.
-- **Improve the repo itself** — docs, CI, tooling.
-- **Report a security issue** — see [SECURITY.md](SECURITY.md). Do *not* open a public issue for vulnerabilities.
+- **Propose a habit** — with evidence it's missing from baseline output. [Open a new-habit issue](https://github.com/AllanOps/Clean-Backend/issues/new/choose) *before* writing a PR.
+- **Challenge a habit** — if you can show the model already does one of the seven unprompted, that's a valuable issue. We'll cut it.
+- **Improve the evaluation** — better scenarios, a confound we missed, results from a different model.
+- **Fix or sharpen** an existing habit, or the repo itself.
+- **Report a security issue** — see [SECURITY.md](SECURITY.md). Never a public issue.
 
-## The golden rule: open an issue first
+## The habit format
 
-For a **new trick**, [open a "new trick" issue](https://github.com/AllanOps/Clean-Backend/issues/new/choose) *before* you write a PR. This is a curated list — agreeing on scope up front saves you from writing a full trap-vs-fix pair that turns out to overlap with an existing one. Small fixes (typos, wrong code) can go straight to a PR.
-
-## The trick format
-
-Every trick is a **trap → fix** pair with a punchy law. Match this structure exactly — it's what makes the skill scannable and consistent:
+Each habit is a `###` section inside one of the two parts. Match this structure:
 
 ````markdown
-## <N>. <Punchy one-line law, imperative mood>.
-### <Subtitle: the practice in one sentence>
-
-For instance;
+### <N>. <The habit, imperative, one line>
 
 ```TypeScript
-// The Trap - <what people naturally do>
-<3-6 lines of code>
+// Measured: <what the baseline output does instead>
+<2-4 lines>
 
-// The Fix - <the practice>
-<3-6 lines of code>
+// <The habit, stated positively.>
+<2-4 lines>
 ```
+
 <1-2 lines: the consequence that makes it worth it>
-**<Bold one-line law.>**
+
+**Skip it when** <an observable condition where applying it would be wrong>.
 ````
 
-Use ` ```SQL ` instead of ` ```TypeScript ` when the example is a query (see trick #9). Keep code blocks short — they illustrate, they don't compile.
+Use ` ```SQL ` when the example is a query (habit 7). Keep code blocks short — they illustrate, they don't compile.
 
-**Numbering.** Tricks are numbered sequentially. To add one, append the next `## N.` section in the skill and a matching row in the README table — that's it. No file states a running total, so there is no count to keep in sync.
+### Rules that come from how the skill is tested
 
-### Style rules
+- **Positive form, not prohibition.** Write "fill the version slot," not "don't forget to version." Guidance phrased as a ban measurably backfires when it competes with another instinct.
+- **Every habit needs a `Skip it when`**, keyed to something observable. Over-application is a real failure mode: not everything deserves a flag.
+- **Part 1 vs Part 2.** Part 1 is for habits absent from *every* baseline regardless of task shape. Part 2 is for habits the model applies when the task cues them and drops when it doesn't. If you're unsure, it's Part 2.
+- **No external links inside `skills/`.** If one is genuinely necessary, add it to [`scripts/url-allowlist.json`](scripts/url-allowlist.json) in the same PR with a justification — CI blocks un-allowlisted links in skill content by design.
+- **No images or binaries** in skill content; it stays copy-pasteable plain text.
 
-- **Voice:** direct, experienced, a little blunt. "You" and "we", present tense. Think senior engineer explaining at a whiteboard, not documentation.
-- **One idea per trick.** If it needs two code blocks to explain, it's probably two tricks.
-- **No external links inside `skills/`** unless they're essential. If you must add one, add it to [`scripts/url-allowlist.json`](scripts/url-allowlist.json) in the same PR with a one-line justification — CI blocks un-allowlisted links in skill content by design.
-- **No images or binaries** in skill content — it's meant to stay copy-pasteable plain text.
+**Numbering.** Habits are numbered sequentially across both parts. Adding one means appending within its part and renumbering anything after it, plus the matching row in the README table. Keep the two in sync — CI checks the anchors.
 
 ## Commit messages
 
-This repo uses [Conventional Commits](https://www.conventionalcommits.org/); releases and the changelog are generated automatically from them.
+This repo uses [Conventional Commits](https://www.conventionalcommits.org/); releases and the changelog are generated from them.
 
 | Prefix | Use it for | Version effect |
 | --- | --- | --- |
-| `feat:` | a new trick or capability | minor bump |
-| `fix:` | correcting an existing trick | patch bump |
+| `feat:` | a new habit or capability | minor bump |
+| `fix:` | correcting an existing habit | patch bump |
 | `docs:` | README/docs only | no release |
-| `ci:` / `chore:` | tooling, workflows | no release |
+| `ci:` / `chore:` | tooling, workflows, evals | no release |
 
-Add `!` (e.g. `feat!:`) or a `BREAKING CHANGE:` footer only when you change the skill in a way that breaks existing installs.
+Add `!` or a `BREAKING CHANGE:` footer when you remove or fundamentally change a habit — that changes what existing installs receive.
 
 ## Run the checks locally
 
-Both scripts are dependency-free Node (no `npm install` needed):
+All dependency-free Node (no `npm install`):
 
 ```bash
-node scripts/validate-repo.mjs   # frontmatter + manifest + consistency checks
-node scripts/scan-content.mjs    # prompt-injection / hidden-content scan
+node scripts/validate-repo.mjs    # frontmatter + manifests + consistency
+node scripts/scan-content.mjs     # prompt-injection / hidden-content scan
+node scripts/test-scanners.mjs    # the scanner's own test suite
 ```
 
-Optionally, if you have the Claude Code CLI installed:
+Optionally, with the Claude Code CLI installed:
 
 ```bash
 claude plugin validate .claude-plugin/plugin.json --strict
 claude plugin validate . --strict
 ```
 
-CI runs all of these on every PR, plus markdown linting and a link check.
+CI runs all of these plus markdown linting and a link/anchor check.
 
 ## Licensing of contributions
 
@@ -82,8 +88,8 @@ By submitting a contribution you agree it is licensed under the project's [MIT L
 
 ## What review looks like
 
-- Every change to `skills/` gets a human read for prompt-injection and for fit with the existing voice — not just a green CI check.
-- New external links are reviewed against the allowlist.
+- Every change to `skills/` gets a human read for prompt injection and for fit with the evidence bar — not just a green CI check.
+- A proposed habit without evidence will be sent back with a scenario to run, not rejected outright.
 - Maintainer response is best-effort; a nudge after a week is welcome.
 
-That's it. Keep it sharp, keep it honest, and thanks for contributing.
+Keep it sharp, keep it honest, and thanks for contributing.

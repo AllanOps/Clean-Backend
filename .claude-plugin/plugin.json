@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "clean-backend",
   "version": "1.0.0",
-  "description": "Backend practices that look like overhead until they save you at 3am — timeouts, idempotency keys, soft deletes, business-metric alerts, and more.",
+  "description": "The backend habits an AI assistant misses on its own — API versioning, feature flags, circuit breakers, and four more. Measured across 13 baseline runs; everything the model already does reliably was cut.",
   "author": {
     "name": "AllanOps",
     "url": "https://github.com/AllanOps"
