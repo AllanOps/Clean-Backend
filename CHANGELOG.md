@@ -2,7 +2,7 @@
 
 ## 1.0.0 (2026-07-22)
 
-### ⚠ BREAKING CHANGES
+### BREAKING CHANGES
 
 * the skill file moved and its name changed from 'Backend skill' to 'clean-backend'; manual copies must be re-installed from the new skills/clean-backend/ path.
 
@@ -19,13 +19,3 @@
 * **docs:** Correct number of backend tricks in BACKEND.md ([a26a9fa](https://github.com/AllanOps/Clean-Backend/commit/a26a9faaa06b59862482418fbe174db13d08fee6))
 * **docs:** Correct typo in BACKEND.md ([1c50ac8](https://github.com/AllanOps/Clean-Backend/commit/1c50ac8a0f14ec49a7766a2c90d4c831def0ff08))
 * **docs:** Remove redundant trailing whitespace from BACKEND.md ([ed88f74](https://github.com/AllanOps/Clean-Backend/commit/ed88f74f58c79233a43bc654b98314e3c68e2ac9))
-
-## Changes
-
-All notable changes to this project are documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html),
-and entries below are generated automatically by
-[release-please](https://github.com/googleapis/release-please) from
-[Conventional Commit](https://www.conventionalcommits.org/) messages.
