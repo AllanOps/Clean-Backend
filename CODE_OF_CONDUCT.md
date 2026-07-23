@@ -59,8 +59,10 @@ representative at an online or offline event.
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported to the community leaders responsible for enforcement at
-**<binarystack101@gmail.com>**.
+reported privately to the community leaders responsible for enforcement through
+GitHub's [private reporting form](https://github.com/AllanOps/Clean-Backend/security/advisories/new)
+(the repository's **Security → "Report a vulnerability"** page). Please note in
+the report that it concerns the Code of Conduct, and do not open a public issue.
 All complaints will be reviewed and investigated promptly and fairly.
 
 All community leaders are obligated to respect the privacy and security of the
