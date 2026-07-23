@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.0.0](https://github.com/AllanOps/Clean-Backend/compare/v1.0.0...v2.0.0) (2026-07-23)
+
+
+### ⚠ BREAKING CHANGES
+
+* field-limited responses, validation at the boundary, idempotency keys, graceful degradation, and intention-revealing naming are removed from the skill. Pin v1 if you depend on their presence.
+
+### Features
+
+* rewrite the skill around measured evidence ([9cc7cc7](https://github.com/AllanOps/Clean-Backend/commit/9cc7cc7ab7d1bb0b12e2cf11179f516657ab854b))
+
 ## 1.0.0 (2026-07-22)
 
 ### BREAKING CHANGES
