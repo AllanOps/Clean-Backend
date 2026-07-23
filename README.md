@@ -2,8 +2,6 @@
 
 <img src="assets/banner.svg" alt="clean-backend — backend practices that keep production boring" width="880">
 
-**The backend practices that keep production boring.**
-
 [![CI](https://github.com/AllanOps/Clean-Backend/actions/workflows/ci.yml/badge.svg)](https://github.com/AllanOps/Clean-Backend/actions/workflows/ci.yml)
 [![Actions Security](https://github.com/AllanOps/Clean-Backend/actions/workflows/actions-security.yml/badge.svg)](https://github.com/AllanOps/Clean-Backend/actions/workflows/actions-security.yml)
 [![Release](https://img.shields.io/github/v/release/AllanOps/Clean-Backend?sort=semver)](https://github.com/AllanOps/Clean-Backend/releases)
@@ -13,9 +11,60 @@
 </div>
 
 > [!NOTE]
-> **Clean-Backend is a [Claude Code](https://claude.com/claude-code) skill.** Install it once, and Claude applies these production-hardening practices whenever it designs, writes, or reviews your backend code — endpoints, payment flows, deletes, background jobs, and alerting.
+> **clean-backend is a [Claude Code](https://claude.com/claude-code) skill.** It supplies the operational habits an AI assistant does not reach for on its own when it designs, writes, or reviews your backend code.
 
-They aren't clever. They're the habits that separate a service which survives Black Friday from one that takes the company down with it — the kind of thing that *looks* like overhead in review, and then saves you at 3am.
+Most "best practices" lists tell your AI things it already does perfectly well. We measured which ones it actually misses — then deleted everything else.
+
+---
+
+## The measurement
+
+We put neutral production-code tasks — a payment endpoint, a product listing, a delete endpoint — in front of a fresh model with **no skill loaded**, then repeated them with the skill, and diffed the output. Thirteen runs.
+
+**Applied reliably with zero prompting**, so we cut them from the skill: field-limited responses, validation at the boundary, graceful degradation, intention-revealing naming, and **complete idempotency on money-moving endpoints in 6 of 6 runs**.
+
+**Never appeared in a single neutral run**, so they became the skill: API versioning, feature flags, circuit breakers.
+
+The full protocol, every prompt, the scorecard, and the two places our own methodology was wrong: **[evals/](evals/README.md)**.
+
+---
+
+## See it in action
+
+Seven neutral baselines. A charge endpoint, a product listing, a delete endpoint. Not one of them versioned the route:
+
+```ts
+// What a fresh model writes, every time:
+POST /charges
+
+// What it does not write unless something tells it to:
+POST /api/v1/charges
+```
+
+Mobile clients outlive your refactors. An unversioned route turns the first breaking change into a coordinated migration — and nothing inside the endpoint you're writing ever reminds you.
+
+---
+
+## The seven
+
+**Part 1 — absent from every baseline.** Lifecycle decisions that are invisible from inside a single endpoint.
+
+| # | Habit | Why it gets skipped |
+| --- | --- | --- |
+| 1 | [Version the route from day one](skills/clean-backend/SKILL.md#1-version-the-route-from-day-one) | Nothing in the endpoint cues it |
+| 2 | [Deploying is not releasing](skills/clean-backend/SKILL.md#2-deploying-is-not-releasing) | Rollout is org policy, not local craft |
+| 3 | [Break the circuit before you retry](skills/clean-backend/SKILL.md#3-break-the-circuit-before-you-retry) | Retries feel like enough |
+
+**Part 2 — present only when the task cues them.** The model does these when the task makes them obvious, and skips them when it doesn't.
+
+| # | Habit | The observed gap |
+| --- | --- | --- |
+| 4 | [Every I/O gets a deadline](skills/clean-backend/SKILL.md#4-every-io-gets-a-deadline-including-the-database) | The external call was bounded; the DB call wasn't |
+| 5 | [Get it off the request path](skills/clean-backend/SKILL.md#5-anything-the-caller-doesnt-await-leaves-the-request-path) | The receipt email was awaited inline |
+| 6 | [Emit the counter, not just the log](skills/clean-backend/SKILL.md#6-emit-the-counter-not-just-the-log-line) | Rich logs, nothing to alert on |
+| 7 | [Every read filters tombstones](skills/clean-backend/SKILL.md#7-every-read-filters-tombstones) | Deletes tombstoned; a read returned them anyway |
+
+**[Read the skill →](skills/clean-backend/SKILL.md)**
 
 ---
 
@@ -28,77 +77,34 @@ They aren't clever. They're the habits that separate a service which survives Bl
 /plugin install clean-backend@allanops
 ```
 
-Then either invoke it explicitly with `/clean-backend:clean-backend`, or just ask Claude to write or review some backend code — it will pull the skill in on its own from the description.
+Then either invoke it explicitly with `/clean-backend:clean-backend`, or just ask for backend code — it triggers on its own.
 
-### Manual install (any agent that reads `~/.claude/skills`)
+### Manual install
 
 ```bash
 git clone https://github.com/AllanOps/Clean-Backend.git
 cp -r Clean-Backend/skills/clean-backend ~/.claude/skills/clean-backend
 ```
 
-Installed this way the skill is invoked as plain `/clean-backend`.
-
----
-
-## See it in action
-
-Every trick is a **trap → fix** pair. Here's #3, the single most common source of customer pain:
-
-> [!IMPORTANT]
-> *"I clicked, but it didn't work, so I clicked again... and now I got charged twice."*
-
-```ts
-// The Trap — retry charges twice
-POST /charges { amount: 4900 }
-
-// The Fix — stable key, server dedupes
-POST /charges
-Idempotency-Key: 8f2c...-94d1
-if (seen(key)) return cached(key);
-return cache(key, charge(amount));
-```
-
-Refresh, retry, network blip — the user's intent was *one* charge. **Anywhere money or state moves, charge a key.**
-
----
-
-## The tricks
-
-| # | The habit | The law |
-| --: | --- | --- |
-| 1 | [Send less data than you think](skills/clean-backend/SKILL.md#1-send-less---always-send-less) | Pick fields per endpoint, not per model. |
-| 2 | [Timeouts on every I/O](skills/clean-backend/SKILL.md#2-timeouts-on-http-are-the-easy-half) | Anything that crosses a process boundary can hang. |
-| 3 | [Idempotency keys where money moves](skills/clean-backend/SKILL.md#3-make-the-second-click-no-op-not-a-bug) | Make the second click a no-op, not a bug. |
-| 4 | [Validate at the door](skills/clean-backend/SKILL.md#4-reject-early-spare-the-database) | Schema-validate at the controller, not the table. |
-| 5 | [Feature flags by default](skills/clean-backend/SKILL.md#5-deploying-is-not-the-same-as-releasing) | Deploying is not the same as releasing. |
-| 6 | [Async the heavy work](skills/clean-backend/SKILL.md#6-if-a-request-waits-for-it-it-shouldnt) | If the user doesn't need it in a millisecond, queue it. |
-| 7 | [Internal rate limits + breakers](skills/clean-backend/SKILL.md#7-rate-limit-users-then-rate-limit-yourselves) | Internal calls deserve buckets and breakers, not blind retries. |
-| 8 | [Version the API from day one](skills/clean-backend/SKILL.md#8-version-the-api-from-day-one) | Mobile apps live longer than your refactors. |
-| 9 | [Soft delete, not `DELETE`](skills/clean-backend/SKILL.md#9-soft-delete-not-delete) | `DELETE` is forever; `deleted_at` is just a Tuesday afternoon. |
-| 10 | [Alert on business metrics](skills/clean-backend/SKILL.md#10-alert-on-business-metrics-not-cpu) | Healthy servers can serve a totally broken product. |
-| 11 | [Plan the failure, make it boring](skills/clean-backend/SKILL.md#11-plan-the-failure-make-it-boring) | Degrade, don't die. |
-| 12 | [Names beat comments](skills/clean-backend/SKILL.md#12-names-beat-comments) | Renaming is the cheapest high-leverage rewrite you'll ever ship. |
-
-**[Read the full skill →](skills/clean-backend/SKILL.md)**
+Installed this way it's invoked as plain `/clean-backend`.
 
 ---
 
 ## Why you can trust this repo
 
-A skill is *instructions injected into your agent*, so every change is treated like a supply-chain change:
+A skill is *instructions injected into your agent*, so every change is treated as a supply-chain change:
 
-- **Schema-validated** — CI checks the skill and plugin manifests against the Agent Skills spec on every PR.
-- **Scanned for prompt injection** — CI hard-fails on hidden/invisible Unicode, encoded blobs, raw-IP links, and instructions that would steer an agent to exfiltrate or execute anything.
-- **Locked-down automation** — GitHub Actions are pinned by commit SHA, run with read-only tokens, and are themselves audited by [zizmor](https://github.com/zizmorcore/zizmor).
+- **Schema-validated** — the skill and plugin manifests are checked against the Agent Skills spec on every PR.
+- **Scanned for prompt injection** — CI hard-fails on invisible or bidirectional Unicode, homoglyph/mixed-script words, encoded blobs, raw-IP links, un-allowlisted URLs, and instructions that would steer an agent to exfiltrate or execute anything. The scanner has its own test suite.
+- **Locked-down automation** — Actions pinned by commit SHA, read-only tokens, and a [zizmor](https://github.com/zizmorcore/zizmor) audit of the workflows themselves.
 
-See [SECURITY.md](SECURITY.md) for the full threat model and how to report a vulnerability privately.
+See [SECURITY.md](SECURITY.md) for the threat model and private reporting.
 
 ---
 
 ## Contributing
 
-Got a hard-won backend habit that belongs here? **[Open a "new trick" issue first](https://github.com/AllanOps/Clean-Backend/issues/new/choose)** so we can agree on it before you write the PR. The exact trap-vs-fix format, style rules, and local checks are in **[CONTRIBUTING.md](CONTRIBUTING.md)**.
+The bar here is unusual: a new habit has to be one the model **doesn't already apply on its own**. Bring evidence, or bring a scenario we can run. Start with a **[new-habit issue](https://github.com/AllanOps/Clean-Backend/issues/new/choose)**; the format and the evidence bar are in **[CONTRIBUTING.md](CONTRIBUTING.md)**.
 
 By contributing you agree your work is licensed under the same MIT license as the project.
 
