@@ -78,6 +78,22 @@ Sensitivity 3/3, specificity 1/1. Each backend hit cited a different trigger phr
 
 **What this does not prove:** it measures description-driven *selection* from an explicit menu, which is a proxy for the plugin runtime rather than the runtime itself, with n=4 and a short decoy list. A registry with dozens of competing skills is a harder test than this one.
 
+## Does it over-apply?
+
+A skill that adds ceremony where none is warranted makes code worse. Every test above measures under-application; this one measures the opposite. Two tasks where most of the habits would be wrong, run **with the skill loaded**:
+
+| Task | Result |
+| --- | --- |
+| An internal `GET /internal/queue-depth`, single consumer, deployed atomically with its only caller | Skipped versioning, flags, and breakers — each citing the matching `Skip it when`. Applied the DB deadline and a gauge. |
+| A one-off backfill script to be run once from a laptop and deleted | Skipped versioning, breakers, and offload. Adapted flags into dry-run-by-default plus `--apply`, and counters into stdout tallies plus exit codes. |
+
+**Neither run over-applied a habit.** The skip conditionals hold under the conditions they name.
+
+Two things worth noting beyond the pass:
+
+- **Adaptation, not ritual.** Habits 2 and 6 have no skip clause covering a CLI script. Rather than bolting on a feature flag and a `metrics.increment` that "goes nowhere" from a laptop, the run preserved each habit's *purpose* in a form that fit — rollback-without-redeploy became a dry run; alertable counters became exit codes. That is the "apply in addition to your own judgment" framing working as intended.
+- **It out-scored the baselines on habit 4.** The script bounded the database both server-side (`statement_timeout`, which actually cancels) and client-side (a backstop for a wedged connection), ordered so the server wins and you get a real error. That is `Correct` under [`RUBRIC.md`](RUBRIC.md); most frontier baselines only reached `Present`.
+
 ## Habits we looked for and did not find
 
 We hunted for an eighth habit in the two task shapes with the most lifecycle character. Both came back empty, on a frontier model:
@@ -96,15 +112,17 @@ Published because a method you can't see the failures of isn't evidence.
 1. **We predicted idempotency would be the biggest gap. On the frontier model it was the most reliably present practice.** On a neutral money-moving endpoint the baseline required an `Idempotency-Key`, deduped before charging, replayed completed results, forwarded the key to the provider, and handled the charged-but-not-persisted case — in 4 of 4 runs. Our single strongest hypothesis was wrong, and it's why the skill no longer mentions idempotency. (On a smaller model that finding reverses — see *Results — smaller model*.)
 2. **Two prompts leaked their own answers.** A delete task that mentioned a "Trash / restore feature" and a rollout task that asked "how I shipped this safely" both told the model what to reach for. Soft-delete and feature-flags briefly looked reflexive as a result. The delete scenario was re-run neutrally (soft-delete: still reflexive on frontier, 2/2); the rollout scenario's flag result was discarded in favour of the neutral baselines, where flags appear 0/7.
 3. **Our first classification was too clean.** We initially called it a tidy six-versus-six split. The neutral re-runs showed the real line is not "can versus can't" — the model can do all of it — but **"never" versus "only when the task cues it."** That distinction produced the two-part structure.
-4. **We scored presence, not correctness.** Every verdict above asks "did the practice appear," not "was it implemented correctly." On the frontier model the distinction rarely mattered; the implementations were genuinely good. On a smaller model it is the entire story — a fail-open idempotency check and a stock field that reads `0` for "unknown" both *appear* as ticked boxes and are both wrong in ways that cost money. A stricter protocol would grade each implementation, not just detect it.
+4. **We scored presence, not correctness.** Every verdict in the tables above asks "did the practice appear," not "was it implemented correctly." On the frontier model the distinction rarely mattered; the implementations were genuinely good. On a smaller model it is the entire story — a fail-open idempotency check and a stock field that reads `0` for "unknown" both *appear* as ticked boxes and are both wrong in ways that cost money. [`RUBRIC.md`](RUBRIC.md) now grades Absent / Present / Correct, with every correctness criterion drawn from a failure we actually observed. The tables above predate it and remain presence-scored; re-scoring them is open work.
 
 ## Re-running it
 
 There is no CI-runnable test here, and pretending otherwise would be dishonest: a run means putting the prompt to a model and reading the output. To reproduce:
 
 1. Open a scenario file and paste its **Baseline prompt** into a fresh session with no skill loaded.
-2. Score the output against the practice list above — did it version the route, gate the rollout, break the circuit, bound the DB call, offload the request path, emit counters, filter tombstones?
+2. Score the output with [`RUBRIC.md`](RUBRIC.md) — Absent / Present / Correct for each practice, keeping the line that decided each call.
 3. Repeat with the skill loaded and diff.
+
+Report both numbers: how many practices reached Present, and how many reached Correct. The gap between them is usually the interesting part.
 
 ## Caveats
 

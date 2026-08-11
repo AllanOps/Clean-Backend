@@ -10,6 +10,8 @@ Plenty of excellent backend practices are *not* in this skill. Input validation,
 
 So "this is a great practice" is not an argument for inclusion. The argument is: **here is output that omits it.** See [evals/](evals/README.md) for the protocol, the prompts, and the scorecard.
 
+There is a second, subtler argument that also qualifies: **here is output that appears to do it and gets it wrong.** A practice the model reaches for but implements unsafely — an idempotency check that fails open, a degraded state that reads as a real value — is worth a habit even though a presence-scored eval would call it reflexive. Score it with [`evals/RUBRIC.md`](evals/RUBRIC.md) and show the Present-but-not-Correct gap.
+
 ## Ways to contribute
 
 - **Propose a habit** — with evidence it's missing from baseline output. [Open a new-habit issue](https://github.com/AllanOps/Clean-Backend/issues/new/choose) *before* writing a PR.
