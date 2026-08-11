@@ -13,19 +13,24 @@
 > [!NOTE]
 > **clean-backend is a [Claude Code](https://claude.com/claude-code) skill.** It supplies the operational habits an AI assistant does not reach for on its own when it designs, writes, or reviews your backend code.
 
-Most "best practices" lists tell your AI things it already does perfectly well. We measured which ones it actually misses — then deleted everything else.
+Most "best practices" lists tell your AI things it already does perfectly well. We measured which ones it actually misses and then deleted everything else.
 
 ---
 
 ## The measurement
 
-We put neutral production-code tasks — a payment endpoint, a product listing, a delete endpoint — in front of a fresh model with **no skill loaded**, then repeated them with the skill, and diffed the output. Thirteen runs.
+We put neutral production-code tasks: a payment endpoint, a product listing, a delete endpoint, all in front of a fresh model with **no skill loaded**, then repeated them with the skill, and diffed the output for thirteen runs.
 
-**Applied reliably with zero prompting**, so we cut them from the skill: field-limited responses, validation at the boundary, graceful degradation, intention-revealing naming, and **complete idempotency on money-moving endpoints in 6 of 6 runs**.
+Field-limited responses, validation at the boundary, graceful degradation, intention-revealing naming, and **complete idempotency on money-moving endpoints in 6 of 6 runs applied reliably with zero prompting**, so we cut them from the skill.
 
-**Never appeared in a single neutral run**, so they became the skill: API versioning, feature flags, circuit breakers.
+API versioning, feature flags, circuit breakers **never appeared in a single neutral run**, so they became the skill.
 
-The full protocol, every prompt, the scorecard, and the two places our own methodology was wrong: **[evals/](evals/README.md)**.
+We then went looking for an eighth habit in the two shapes most likely to hide one — a column rename on a hot table, and a webhook receiver. Both came back empty. Seven is the whole set at this resolution.
+
+> [!IMPORTANT]
+> **The cuts were measured on a frontier model.** Re-running the same scenarios on a small, fast model, two of them do not hold: it hard-deleted rows instead of tombstoning, and its idempotency was either missing or **failed open** on a money endpoint. If you run this skill against a smaller model, don't assume those. The seven habits below are needed on both tiers — more so on the smaller one.
+
+The full protocol, every prompt, both scorecards, the empty eighth-habit hunt, and the four places our own methodology was wrong: **[evals/](evals/README.md)**.
 
 ---
 
@@ -47,7 +52,7 @@ Mobile clients outlive your refactors. An unversioned route turns the first brea
 
 ## The seven
 
-**Part 1 — absent from every baseline.** Lifecycle decisions that are invisible from inside a single endpoint.
+**Part 1 — absent from every endpoint-writing baseline.** Lifecycle decisions that are invisible from inside a single endpoint. (When the task *itself* is a risky rollout, the model does reach for flags on its own — but writing a feature is the common case, and there they never appeared.)
 
 | # | Habit | Why it gets skipped |
 | --- | --- | --- |
