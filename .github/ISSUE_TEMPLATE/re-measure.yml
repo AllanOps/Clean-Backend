@@ -1,0 +1,85 @@
+name: Re-measurement result
+description: Report a habit re-measured against a model — including a result showing it is now reflexive and should be cut.
+title: "measure: habit N on <model>"
+labels: ["re-measure"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This skill only ships habits a model **fails to apply on its own**, so the
+        evidence has a shelf life — every model release can turn a habit into a
+        no-op. Re-measurements are as valuable as new proposals, and a result that
+        gets a habit **cut** is the most valuable kind.
+
+        Protocol and rubric: [evals/README.md](https://github.com/AllanOps/Clean-Backend/blob/main/evals/README.md)
+        and [evals/RUBRIC.md](https://github.com/AllanOps/Clean-Backend/blob/main/evals/RUBRIC.md).
+  - type: input
+    id: model
+    attributes:
+      label: Model and version
+      description: Be specific — the whole point is that behaviour moves between releases.
+      placeholder: "claude-haiku-4-5-20251001 / gpt-5.2 / llama-4-70b"
+    validations:
+      required: true
+  - type: dropdown
+    id: scenario
+    attributes:
+      label: Which scenario did you run?
+      options:
+        - "charges (money-moving endpoint)"
+        - "products (listing with a flaky dependency)"
+        - "delete-document (delete endpoint)"
+        - "A new scenario of my own (describe below)"
+    validations:
+      required: true
+  - type: dropdown
+    id: habit
+    attributes:
+      label: Which habit?
+      options:
+        - "1 — Version the route from day one"
+        - "2 — Deploying is not releasing"
+        - "3 — Break the circuit before you retry"
+        - "4 — Every I/O gets a deadline"
+        - "5 — Get it off the request path"
+        - "6 — Emit the counter, not just the log line"
+        - "7 — Every read filters tombstones"
+        - "A practice we cut (idempotency, validation, degradation, naming, field-limiting)"
+    validations:
+      required: true
+  - type: dropdown
+    id: score
+    attributes:
+      label: Rubric score in the baseline (no skill loaded)
+      description: See RUBRIC.md. "Present" means it appeared; "Correct" means it holds up under the failure it exists to prevent.
+      options:
+        - "Absent — the model did not attempt it"
+        - "Present — it appeared, but fails a correctness criterion"
+        - "Correct — fully applied, unprompted"
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: The deciding excerpt
+      description: The specific lines from the baseline output that decided the score. This is what makes the result auditable.
+      render: text
+    validations:
+      required: true
+  - type: input
+    id: reps
+    attributes:
+      label: How many runs?
+      description: Single samples lie. Two or more is much stronger.
+      placeholder: "3"
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I used the committed baseline prompt without adding hints about the practice
+          required: true
+        - label: I understand a "Correct" result argues for cutting the habit, and that's a good outcome
+          required: true

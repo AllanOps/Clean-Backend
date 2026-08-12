@@ -12,6 +12,28 @@ So "this is a great practice" is not an argument for inclusion. The argument is:
 
 There is a second, subtler argument that also qualifies: **here is output that appears to do it and gets it wrong.** A practice the model reaches for but implements unsafely — an idempotency check that fails open, a degraded state that reads as a real value — is worth a habit even though a presence-scored eval would call it reflexive. Score it with [`evals/RUBRIC.md`](evals/RUBRIC.md) and show the Present-but-not-Correct gap.
 
+### Which tier a finding belongs to
+
+A habit ships when **the model that will run it** fails to apply it correctly. That makes the target tier part of the decision, not an afterthought:
+
+| Finding | Outcome |
+| --- | --- |
+| A **frontier** model applies it but gets it wrong (Present, not Correct) | **Ships as a habit.** Same bar, better measurement. |
+| Only a **smaller** model gets it wrong | **Documented in `evals/` with the tier stated. Not added to the skill** — it would tax every frontier user for a case they don't have. |
+| You want to target a smaller tier properly | **A separate skill**, with its own measurements. Never a conditional section bolted onto this one. |
+
+"Present but not Correct" is not a new *kind* of habit — it is the same habit measured better. Idempotency looked reflexive under presence-scoring; under the rubric it is reflexive on frontier and unsafe on smaller models. The right response to that was re-scoring, not new content.
+
+No frontier Present-but-not-Correct has been observed yet. If you find one, it ships.
+
+### Wanted: other model families
+
+Every result so far is Claude — frontier and Haiku-class. The scenarios and rubric are committed precisely so someone can run them elsewhere.
+
+**Running the baselines against GPT, Gemini, Llama, or a local model and reporting back is the single most valuable contribution available right now.** You need no repo access: take a prompt from [`evals/scenarios/`](evals/scenarios/) verbatim, run it with no skill loaded, score it with the rubric, and file a [re-measurement issue](https://github.com/AllanOps/Clean-Backend/issues/new/choose).
+
+A result showing a habit is **already reflexive** on your model is as valuable as one showing a gap — it tells us the skill is narrower than advertised, and narrowing it is the whole design.
+
 ## Ways to contribute
 
 - **Propose a habit** — with evidence it's missing from baseline output. [Open a new-habit issue](https://github.com/AllanOps/Clean-Backend/issues/new/choose) *before* writing a PR.
@@ -83,6 +105,27 @@ claude plugin validate . --strict
 ```
 
 CI runs all of these plus markdown linting and a link/anchor check.
+
+## Maintainer workflow
+
+For anyone with push access. These exist because we lost an afternoon to a
+diverged local `main`, and the recovery was only easy because the work happened
+to be committed.
+
+- **Branch before you commit. Never commit on local `main`.** The ruleset
+  protects `main` on the remote, but nothing stops a commit landing on your local
+  copy, and that is what creates the divergence.
+- **`git config pull.rebase true`** is set for this repo. `git pull` replays your
+  commits on top of the remote instead of leaving a divergence that makes
+  `git reset --hard` look like the fix.
+- **Take a backup branch before anything destructive.** `git branch backup/$(date +%Y%m%d-%H%M)`
+  costs nothing and makes a bad `reset` a one-command undo.
+- **`git reflog` is the undo button.** A commit that a `reset --hard` "deleted" is
+  still in the object database for about 90 days — find its SHA in the reflog and
+  `git cherry-pick` it back. Committed work is very hard to lose.
+- **Untracked files are the genuinely fragile state.** `reset --hard` spares them;
+  `git clean -fd` does not, and neither is in the reflog. Committing early is the
+  only real protection.
 
 ## Licensing of contributions
 

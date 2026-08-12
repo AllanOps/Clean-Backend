@@ -1,0 +1,430 @@
+# charges — frontier — baseline
+
+- **Scenario:** [`../../scenarios/charges.md`](../../scenarios/charges.md), baseline prompt used verbatim
+- **Model:** Claude frontier (Sonnet-class), 2026-08-11
+- **Condition:** baseline — no skill loaded
+- **Record kind:** verbatim
+
+## Scorecard
+
+Scored per [`../../RUBRIC.md`](../../RUBRIC.md).
+
+| Practice | Score | Deciding line |
+| --- | --- | --- |
+| **1. Version the route** | Absent | Handler exported as `createCharge`; no version anywhere in the route or headers. |
+| **2. Feature flags** | Absent | No kill switch on the endpoint. |
+| **3. Circuit breaker** | Absent | Provider call is bounded by a timeout only; no breaker, no shed valve. |
+| **4. Deadline on every I/O** | **Present** | `withTimeout(paymentProvider.charge(...), PROVIDER_TIMEOUT_MS)` — but `db.charges.insert`, `findByIdempotencyKey`, and `finalize` are all unbounded. Fails the "every process boundary" criterion. |
+| **5. Off the request path** | **Present** | `await mailer.sendReceipt(...)` inside a try/catch on the request path. Comment concedes "ideally this is an outbox row drained by a worker." Not durable ⇒ not Correct. |
+| **6. Business counters** | **Correct** | `charges.succeeded`, `charges.declined`, `charges.orphaned`, `charges.indeterminate`, `charges.idempotency_mismatch` — every terminal branch. Alertable on business outcomes. |
+| **7. Tombstone-aware reads** | n/a | No visibility read on this endpoint. |
+| *Idempotency* (cut) | **Correct** | Key required (`requireIdempotencyKey` throws 400); **reserved before the charge** via `db.charges.insert({status:'pending'})`; replay returns the original result; payload `fingerprint` rejects key reuse; key forwarded to the provider. No fail-open path. |
+| *Validation* (cut) | **Correct** | `parseBody` rejects floats outright, bounds the amount, allowlists ISO 4217. |
+| *Degradation* (cut) | **Correct** | Three-state model: a timeout records `unknown`, never `failed` — "marking it failed would let a retry double-charge." Degraded state stays distinguishable. |
+| *Field-limiting* (cut) | Correct | Response is `{ chargeId, status, requestId }`. |
+| *Naming* (cut) | Correct | `classifyProviderError`, `IN_FLIGHT_GRACE_MS`, `handleProviderError`. |
+
+**Reached Present or better: 6 · Reached Correct: 5.**
+
+## Notes
+
+- This is the strongest idempotency implementation observed in any baseline, and it is the clean counter-example to the smaller-model runs: mandatory, reserved-before-charge, fingerprinted, and fails closed.
+- **Habit 6 scored Correct here, where earlier frontier charges baselines emitted no counters at all.** That is run-to-run variance on a habit we published as absent 0/7. The aggregate claim stands, but individual runs vary — which is precisely what committed artifacts are for.
+- Habits 4 and 5 reproduce the published gaps exactly: the external call is bounded and the database is not; the receipt is awaited inline with the outbox acknowledged in a comment but not implemented.
+
+## Verbatim output
+
+````markdown
+```ts
+import { createHash, randomUUID } from 'node:crypto';
+import type { Request, RequestHandler, Response } from 'express';
+
+import { paymentProvider } from '../clients/paymentProvider';
+import { mailer } from '../clients/mailer';
+import { db } from '../db';
+import { logger } from '../observability/logger';
+import { metrics } from '../observability/metrics';
+
+/* Assumed dependency surface
+ *   db.charges.insert(row)                 -> throws UniqueViolation on (customer_id, idempotency_key)
+ *   db.charges.findByIdempotencyKey(...)   -> ChargeRow | null
+ *   db.charges.finalize(id, patch)         -> updates status/chargeId, returns updated row
+ *
+ * `status` is deliberately a three-state machine, not a boolean. A payment
+ * whose outcome we never observed is NOT a failure — see handleProviderError.
+ */
+type ChargeStatus = 'pending' | 'succeeded' | 'failed' | 'unknown';
+
+interface ChargeRow {
+  id: string;
+  idempotencyKey: string;
+  requestFingerprint: string;
+  customerId: string;
+  amountCents: number;
+  currency: string;
+  status: ChargeStatus;
+  chargeId: string | null;
+  createdAt: Date;
+}
+
+const SUPPORTED_CURRENCIES = new Set(['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY']);
+const ZERO_DECIMAL_CURRENCIES = new Set(['JPY']);
+
+/** Hard ceiling in minor units. Anything larger goes through manual review. */
+const MAX_AMOUNT_MINOR = 1_000_000;
+
+/** Upper bound on how long we will hold an HTTP worker waiting on the PSP. */
+const PROVIDER_TIMEOUT_MS = 12_000;
+
+/** How long a `pending` row is considered "another request is still in flight". */
+const IN_FLIGHT_GRACE_MS = PROVIDER_TIMEOUT_MS + 3_000;
+
+class HttpError extends Error {
+  constructor(
+    readonly status: number,
+    readonly code: string,
+    message: string,
+    readonly details?: unknown,
+    readonly headers?: Record<string, string>,
+  ) {
+    super(message);
+    this.name = 'HttpError';
+  }
+}
+
+class TimeoutError extends Error {
+  constructor(label: string, ms: number) {
+    super(`${label} exceeded ${ms}ms`);
+    this.name = 'TimeoutError';
+  }
+}
+
+async function withTimeout<T>(work: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const bomb = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new TimeoutError(label, ms)), ms);
+    timer.unref?.();
+  });
+  try {
+    return await Promise.race([work, bomb]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Stable identity of the payload, used to detect key reuse with different args. */
+function fingerprint(input: { customerId: string; amountCents: number; currency: string }): string {
+  return createHash('sha256')
+    .update(`${input.customerId}\u0000${input.amountCents}\u0000${input.currency}`)
+    .digest('hex');
+}
+
+function isUniqueViolation(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && (err as { code?: string }).code === '23505';
+}
+
+interface ValidCharge {
+  customerId: string;
+  amountCents: number;
+  currency: string;
+}
+
+function parseBody(body: unknown): ValidCharge {
+  const errors: Array<{ field: string; message: string }> = [];
+
+  if (typeof body !== 'object' || body === null || Array.isArray(body)) {
+    throw new HttpError(400, 'invalid_body', 'Request body must be a JSON object.');
+  }
+  const { customerId, amountCents, currency } = body as Record<string, unknown>;
+
+  if (typeof customerId !== 'string' || customerId.trim().length === 0 || customerId.length > 64) {
+    errors.push({ field: 'customerId', message: 'Must be a non-empty string of at most 64 characters.' });
+  }
+
+  if (typeof amountCents !== 'number' || !Number.isSafeInteger(amountCents)) {
+    // Rejects floats outright: 10.5 "cents" is always a caller bug.
+    errors.push({ field: 'amountCents', message: 'Must be an integer number of minor currency units.' });
+  } else if (amountCents <= 0) {
+    errors.push({ field: 'amountCents', message: 'Must be greater than zero.' });
+  } else if (amountCents > MAX_AMOUNT_MINOR) {
+    errors.push({ field: 'amountCents', message: `Must not exceed ${MAX_AMOUNT_MINOR} minor units.` });
+  }
+
+  let normalizedCurrency = '';
+  if (typeof currency !== 'string' || !/^[A-Za-z]{3}$/.test(currency)) {
+    errors.push({ field: 'currency', message: 'Must be a 3-letter ISO 4217 code.' });
+  } else {
+    normalizedCurrency = currency.toUpperCase();
+    if (!SUPPORTED_CURRENCIES.has(normalizedCurrency)) {
+      errors.push({ field: 'currency', message: `Unsupported currency: ${normalizedCurrency}.` });
+    }
+  }
+
+  if (errors.length > 0) {
+    throw new HttpError(422, 'validation_failed', 'One or more fields are invalid.', errors);
+  }
+
+  const amount = amountCents as number;
+  if (ZERO_DECIMAL_CURRENCIES.has(normalizedCurrency)) {
+    logger.debug({ currency: normalizedCurrency }, 'zero_decimal_currency_charge');
+  }
+
+  return { customerId: (customerId as string).trim(), amountCents: amount, currency: normalizedCurrency };
+}
+
+function requireIdempotencyKey(req: Request): string {
+  const raw = req.header('idempotency-key');
+  if (typeof raw !== 'string' || raw.trim().length === 0) {
+    throw new HttpError(
+      400,
+      'idempotency_key_required',
+      'An Idempotency-Key header is required for all charge requests.',
+    );
+  }
+  const key = raw.trim();
+  if (key.length > 255) {
+    throw new HttpError(400, 'idempotency_key_invalid', 'Idempotency-Key must be at most 255 characters.');
+  }
+  return key;
+}
+
+function sendError(res: Response, requestId: string, err: HttpError): void {
+  if (err.headers) res.set(err.headers);
+  res.status(err.status).json({
+    error: { code: err.code, message: err.message, ...(err.details ? { details: err.details } : {}) },
+    requestId,
+  });
+}
+
+type ProviderOutcome =
+  | { kind: 'declined'; code: string; message: string }
+  | { kind: 'invalid'; code: string; message: string }
+  | { kind: 'indeterminate'; reason: string };
+
+/**
+ * The critical distinction: did the provider tell us "no" (safe to mark failed),
+ * or did we simply fail to hear back (money may have moved — mark unknown)?
+ */
+function classifyProviderError(err: unknown): ProviderOutcome {
+  if (err instanceof TimeoutError) {
+    return { kind: 'indeterminate', reason: 'timeout' };
+  }
+  const e = err as { type?: string; code?: string; message?: string; statusCode?: number };
+
+  if (e?.type === 'card_error' || e?.type === 'declined') {
+    return { kind: 'declined', code: e.code ?? 'card_declined', message: e.message ?? 'The card was declined.' };
+  }
+  if (typeof e?.statusCode === 'number' && e.statusCode >= 400 && e.statusCode < 500 && e.statusCode !== 429) {
+    return { kind: 'invalid', code: e.code ?? 'provider_rejected_request', message: e.message ?? 'Payment rejected.' };
+  }
+  return { kind: 'indeterminate', reason: e?.code ?? e?.type ?? 'provider_unavailable' };
+}
+
+export const createCharge: RequestHandler = async (req, res) => {
+  const requestId = req.header('x-request-id') ?? randomUUID();
+  res.set('x-request-id', requestId);
+
+  const log = logger.child({ requestId, route: 'POST /charges' });
+
+  try {
+    const idempotencyKey = requireIdempotencyKey(req);
+    const input = parseBody(req.body);
+    const requestFingerprint = fingerprint(input);
+
+    const baseLog = log.child({
+      customerId: input.customerId,
+      amountCents: input.amountCents,
+      currency: input.currency,
+      idempotencyKey,
+    });
+
+    /* 1. Reserve the idempotency key before any money moves */
+    const attemptId = randomUUID();
+    let reserved = true;
+
+    try {
+      await db.charges.insert({
+        id: attemptId,
+        idempotencyKey,
+        requestFingerprint,
+        customerId: input.customerId,
+        amountCents: input.amountCents,
+        currency: input.currency,
+        status: 'pending',
+        chargeId: null,
+      });
+    } catch (err) {
+      if (!isUniqueViolation(err)) throw err;
+      reserved = false;
+    }
+
+    if (!reserved) {
+      const existing = await db.charges.findByIdempotencyKey(input.customerId, idempotencyKey);
+      if (!existing) {
+        throw new HttpError(503, 'idempotency_conflict', 'Please retry this request.', undefined, {
+          'retry-after': '2',
+        });
+      }
+      return replay(res, requestId, baseLog, existing, requestFingerprint);
+    }
+
+    /* 2. Charge */
+    let chargeId: string;
+    try {
+      const result = await withTimeout(
+        paymentProvider.charge({
+          customerId: input.customerId,
+          amountCents: input.amountCents,
+          currency: input.currency,
+          // Pass our key through so a provider-side retry cannot double-charge either.
+          idempotencyKey,
+        }),
+        PROVIDER_TIMEOUT_MS,
+        'paymentProvider.charge',
+      );
+
+      if (!result?.chargeId || typeof result.chargeId !== 'string') {
+        throw new TimeoutError('paymentProvider.charge returned no chargeId', 0);
+      }
+      chargeId = result.chargeId;
+    } catch (err) {
+      return await handleProviderError(res, requestId, baseLog, attemptId, err);
+    }
+
+    /* 3. Persist the outcome */
+    try {
+      await db.charges.finalize(attemptId, { status: 'succeeded', chargeId });
+    } catch (err) {
+      metrics.increment('charges.orphaned');
+      baseLog.fatal({ err, chargeId, attemptId }, 'CHARGE_PERSIST_FAILED_MANUAL_RECONCILIATION_REQUIRED');
+      throw new HttpError(
+        500,
+        'charge_recorded_out_of_band',
+        'The payment was processed but could not be recorded. Do not retry; support has been notified.',
+      );
+    }
+
+    metrics.increment('charges.succeeded', { currency: input.currency });
+
+    /* 4. Receipt: best effort, never fails the charge */
+    // Ideally this is an outbox row drained by a worker.
+    try {
+      await mailer.sendReceipt(input.customerId, chargeId);
+    } catch (err) {
+      metrics.increment('charges.receipt_failed');
+      baseLog.error({ err, chargeId }, 'receipt_email_failed');
+    }
+
+    res.status(201).json({ chargeId, status: 'succeeded', requestId });
+  } catch (err) {
+    if (err instanceof HttpError) {
+      if (err.status >= 500) log.error({ err }, 'charge_request_failed');
+      return sendError(res, requestId, err);
+    }
+    log.error({ err }, 'charge_request_unhandled_error');
+    metrics.increment('charges.unhandled_error');
+    sendError(res, requestId, new HttpError(500, 'internal_error', 'An unexpected error occurred.'));
+  }
+};
+
+function replay(
+  res: Response,
+  requestId: string,
+  log: typeof logger,
+  existing: ChargeRow,
+  requestFingerprint: string,
+): void {
+  // Same key, different payload: the client has a bug. Refusing is the only safe answer.
+  if (existing.requestFingerprint !== requestFingerprint) {
+    metrics.increment('charges.idempotency_mismatch');
+    throw new HttpError(
+      422,
+      'idempotency_key_reused',
+      'This Idempotency-Key was already used with a different request body.',
+    );
+  }
+
+  switch (existing.status) {
+    case 'succeeded':
+      metrics.increment('charges.replayed');
+      res.set('idempotent-replay', 'true');
+      res.status(200).json({ chargeId: existing.chargeId, status: 'succeeded', requestId });
+      return;
+
+    case 'failed':
+      throw new HttpError(402, 'charge_declined', 'The original charge for this key was declined.');
+
+    case 'pending': {
+      const age = Date.now() - existing.createdAt.getTime();
+      if (age < IN_FLIGHT_GRACE_MS) {
+        throw new HttpError(409, 'charge_in_progress', 'A charge with this key is still in progress.', undefined, {
+          'retry-after': '3',
+        });
+      }
+      log.error({ attemptId: existing.id, ageMs: age }, 'stale_pending_charge');
+    }
+    // falls through: a long-stale pending row is, for our purposes, indeterminate.
+    case 'unknown':
+      throw new HttpError(
+        409,
+        'charge_outcome_unknown',
+        'The outcome of the original charge is still being confirmed. Do not retry with a new key.',
+      );
+  }
+}
+
+async function handleProviderError(
+  res: Response,
+  requestId: string,
+  log: typeof logger,
+  attemptId: string,
+  err: unknown,
+): Promise<void> {
+  const outcome = classifyProviderError(err);
+
+  if (outcome.kind === 'declined' || outcome.kind === 'invalid') {
+    await db.charges.finalize(attemptId, { status: 'failed', chargeId: null }).catch((dbErr) => {
+      log.error({ err: dbErr, attemptId }, 'failed_to_mark_charge_failed');
+    });
+    metrics.increment('charges.declined', { code: outcome.code });
+    log.info({ code: outcome.code }, 'charge_declined');
+    sendError(res, requestId, new HttpError(402, outcome.code, outcome.message));
+    return;
+  }
+
+  // Indeterminate: the charge may well have succeeded. Marking it 'failed' here
+  // would let a retry double-charge, so it stays claimed until reconciliation.
+  await db.charges.finalize(attemptId, { status: 'unknown', chargeId: null }).catch((dbErr) => {
+    log.error({ err: dbErr, attemptId }, 'failed_to_mark_charge_unknown');
+  });
+  metrics.increment('charges.indeterminate', { reason: outcome.reason });
+  log.error({ err, attemptId, reason: outcome.reason }, 'charge_outcome_indeterminate');
+
+  sendError(
+    res,
+    requestId,
+    new HttpError(
+      502,
+      'payment_provider_unavailable',
+      'We could not confirm the outcome of this payment. Retry with the same Idempotency-Key.',
+      undefined,
+      { 'retry-after': '5' },
+    ),
+  );
+}
+```
+
+**Production concerns I addressed**
+
+- **Idempotency is mandatory, not optional.** The `Idempotency-Key` header is required and the key is *reserved in the database before the provider is called*, so a client retry, a load-balancer replay, or a double-click can never produce two charges. Reuse of a key with a different payload is rejected rather than silently replayed.
+- **The three-state outcome model.** A timeout or 5xx is recorded as `unknown`, never `failed` — we don't know whether money moved. Marking it failed would let a retry double-charge. Only a deterministic decline from the provider is recorded as `failed`.
+- **The orphaned-charge window.** If the provider succeeds but the DB write fails, that's logged at fatal with a dedicated metric and a distinct error code telling the client *not* to retry.
+- **Receipt email cannot fail the charge.** The mailer is awaited inside a catch that only logs. Noted inline that an outbox/queue is the better home for it.
+- **Input validation with money-specific rules.** Integer-only amounts (floats rejected outright), positive and capped, ISO 4217 allowlist with normalization, and an explicit note on zero-decimal currencies.
+- **Bounded provider call.** A hard timeout prevents an unresponsive PSP from pinning HTTP workers, with the timer cleaned up in `finally`.
+- **Error responses are stable and non-leaky.** Consistent `{ error: { code, message, details }, requestId }` shape, correct status codes, `Retry-After` where appropriate, and no stack traces or provider payloads reaching the client.
+- **Observability.** Request-ID propagation, child loggers with charge context, and counters on every terminal branch — including `charges.orphaned`, `charges.indeterminate`, `charges.idempotency_mismatch`.
+- **No unhandled rejections.** Every path is inside the top-level try/catch.
+
+Two things deliberately left outside this handler, as they belong in middleware: authentication/authorization, and rate limiting plus request body size limits.
+````

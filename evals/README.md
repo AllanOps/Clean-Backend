@@ -2,6 +2,9 @@
 
 This skill ships only habits an AI assistant **fails to apply on its own**. That claim is worthless unless you can check it, so this directory holds the protocol, the exact prompts, the results, and the places our own method was wrong.
 
+> **Evidence last refreshed: 2026-08-11** — Claude frontier and Haiku-class.
+> Run records are in [`runs/`](runs/README.md). This date matters: see *When to re-measure*.
+
 ## Protocol
 
 1. **RED (baseline).** Give a fresh model a neutral production-code task with **no skill loaded** and no hint about any specific practice. Ask for the code plus a list of "production concerns I addressed."
@@ -38,6 +41,32 @@ Committed so you can re-run them against your own model:
 | Intention-revealing naming | 7 / 7 | cut |
 
 The shape of the result: **code-hygiene and correctness practices are already reflexive; lifecycle and platform practices are not.** Nothing inside a single endpoint cues "version this," "flag this," or "break the circuit."
+
+## First re-measurement (2026-08-11) — four claims weakened
+
+The tables above are presence-scored and predate the rubric. The first rubric-scored batch — 4 neutral baselines, charges + products × frontier + Haiku, all verbatim in [`runs/2026-08-rubric-batch/`](runs/2026-08-rubric-batch/) — **contradicts four of them.**
+
+Frontier baselines, scored Absent / Present / Correct:
+
+| Habit | Published claim | charges | products | Status |
+| --- | --- | --- | --- | --- |
+| 1 Version the route | absent 0/7 | Absent | Absent | **holds** |
+| 2 Feature flags | absent 0/7 | Absent | Absent | **holds** |
+| 3 Circuit breaker | absent 0/7 | Absent | **Correct** | weakened |
+| 4 Deadline on every I/O | external bounded, DB not | Present | **Correct** | weakened |
+| 5 Off the request path | task-dependent | Present | n/a | holds |
+| 6 Business counters | task-dependent | **Correct** | **Correct** | **significantly weakened** |
+| 7 Tombstone-aware reads | read path missed | n/a | **Correct** | weakened |
+
+The products run bounded `db.products.findAll()`, built a circuit breaker with a half-open probe that correctly excludes non-transport failures, filtered `deletedAt` on the read, and emitted per-outcome counters — all unprompted, all things the published tables record as gaps.
+
+**Nothing has been cut on this evidence.** The [policy](#when-to-re-measure) requires a habit to score Correct *across repeated runs*, and n=2 is not that. But the direction is clear and it points at our own skill:
+
+- **Habit 6 is the leading cut candidate** — Correct in both fresh frontier runs.
+- **Habits 3, 4, and 7** each reached Correct once and need n ≥ 5 to settle.
+- **Habits 1 and 2 are unshaken** — versioning and feature flags have now been absent in 9 of 9 neutral frontier baselines.
+
+Two honest reads of the same data: either frontier behaviour has moved since the original batch, or run-to-run variance was always higher than aggregate counts revealed. This batch cannot distinguish them, and both argue for the same next step — re-measure 3, 4, 6, and 7 at higher n before deciding.
 
 ## Results — smaller model
 
@@ -77,6 +106,25 @@ Content only matters if the skill gets loaded. We tested the description itself:
 Sensitivity 3/3, specificity 1/1. Each backend hit cited a different trigger phrase from the description, so the enumerated triggers are doing real work.
 
 **What this does not prove:** it measures description-driven *selection* from an explicit menu, which is a proxy for the plugin runtime rather than the runtime itself, with n=4 and a short decoy list. A registry with dozens of competing skills is a harder test than this one.
+
+### Live registry (2026-08-11)
+
+The menu proxy above was re-run against the **installed plugin** in a registry of roughly a hundred real skills. No skill was mentioned in any prompt; each agent was asked afterwards to list what it had consulted.
+
+| Task | Loaded clean-backend? |
+| --- | --- |
+| "Implement a `POST /orders` endpoint..." | **yes** — loaded `clean-backend:clean-backend` v2.0.0 from the plugin cache |
+| "Our payments service goes live next week, give me a production-readiness review" | **yes** — attributed six of the seven habits by name in its output |
+| Responsive React pricing table (control) | **no** — *"loading it would have meant applying idempotency keys and circuit breakers to a pricing card"* |
+
+Sensitivity 2/2, specificity 1/1, against the real registry rather than a curated menu.
+
+**Confounds, both real:**
+
+- **The agents' working directory was this repo.** A repo named for the skill plausibly primes selection toward it. That cuts against the two positives — but it makes the control *stronger*, since the priming worked against abstention and it abstained anyway with explicit reasoning.
+- **The `POST /orders` run also read [`RUBRIC.md`](RUBRIC.md) and the run artifacts**, and credited them for the stricter bar it applied ("why the breaker ignores business rejections, why fulfilment goes to a durable outbox rather than a floating promise"). Its output quality is therefore *skill + rubric + artifacts*, not the skill alone. The trigger result stands; the quality is not skill-attributable.
+
+A clean version of this test runs from a directory unrelated to this repo, with the eval material out of reach.
 
 ## Does it over-apply?
 
@@ -123,6 +171,27 @@ There is no CI-runnable test here, and pretending otherwise would be dishonest: 
 3. Repeat with the skill loaded and diff.
 
 Report both numbers: how many practices reached Present, and how many reached Correct. The gap between them is usually the interesting part.
+
+## When to re-measure
+
+**This evidence has a shelf life.** The skill's whole thesis — ship only what the model misses — is measured against a moving target. Every model release can turn a habit into a no-op, and a habit that has quietly become reflexive is exactly the dead weight this project was built to delete. A skill that stops being re-measured keeps *looking* evidence-backed while ceasing to be.
+
+**Re-measure when:**
+
+- A major model release ships, or the model you actually run this against changes.
+- A contributor reports a habit now being applied unprompted.
+- The refresh date above is more than a couple of model generations old.
+
+**What a result means:**
+
+| Baseline result for a shipped habit | Consequence |
+| --- | --- |
+| Still Absent or Present-not-Correct | Habit stays. Update the refresh date. |
+| Now **Correct**, unprompted, across repeated runs | **Cut the habit.** Same bar that removed the original five. |
+
+Cutting is the success case, not a regression. The skill getting shorter as models improve is the design working.
+
+Report a result with the [re-measurement issue template](https://github.com/AllanOps/Clean-Backend/issues/new/choose) — including a result that argues for a cut.
 
 ## Caveats
 

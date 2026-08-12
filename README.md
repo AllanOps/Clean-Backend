@@ -30,7 +30,9 @@ We then went looking for an eighth habit in the two shapes most likely to hide o
 > [!IMPORTANT]
 > **The cuts were measured on a frontier model.** Re-running the same scenarios on a small, fast model, two of them do not hold: it hard-deleted rows instead of tombstoning, and its idempotency was either missing or **failed open** on a money endpoint. If you run this skill against a smaller model, don't assume those. The seven habits below are needed on both tiers — more so on the smaller one.
 
-The full protocol, every prompt, both scorecards, the empty eighth-habit hunt, and the four places our own methodology was wrong: **[evals/](evals/README.md)**.
+The full protocol, every prompt, both scorecards, the run records, the empty eighth-habit hunt, and the four places our own methodology was wrong: **[evals/](evals/README.md)**.
+
+**Evidence last refreshed: 2026-08-11** (Claude frontier and Haiku-class). That date is part of the claim — models improve, and a habit that becomes reflexive gets cut. See [when we re-measure](evals/README.md#when-to-re-measure).
 
 ---
 
