@@ -106,6 +106,27 @@ claude plugin validate . --strict
 
 CI runs all of these plus markdown linting and a link/anchor check.
 
+## Maintainer workflow
+
+For anyone with push access. These exist because we lost an afternoon to a
+diverged local `main`, and the recovery was only easy because the work happened
+to be committed.
+
+- **Branch before you commit. Never commit on local `main`.** The ruleset
+  protects `main` on the remote, but nothing stops a commit landing on your local
+  copy, and that is what creates the divergence.
+- **`git config pull.rebase true`** is set for this repo. `git pull` replays your
+  commits on top of the remote instead of leaving a divergence that makes
+  `git reset --hard` look like the fix.
+- **Take a backup branch before anything destructive.** `git branch backup/$(date +%Y%m%d-%H%M)`
+  costs nothing and makes a bad `reset` a one-command undo.
+- **`git reflog` is the undo button.** A commit that a `reset --hard` "deleted" is
+  still in the object database for about 90 days — find its SHA in the reflog and
+  `git cherry-pick` it back. Committed work is very hard to lose.
+- **Untracked files are the genuinely fragile state.** `reset --hard` spares them;
+  `git clean -fd` does not, and neither is in the reflog. Committing early is the
+  only real protection.
+
 ## Licensing of contributions
 
 By submitting a contribution you agree it is licensed under the project's [MIT License](LICENSE) (inbound = outbound, per [GitHub's Terms of Service](https://docs.github.com/en/site-policy/github-terms/github-terms-of-service#6-contributions-under-repository-license)). No separate CLA.
