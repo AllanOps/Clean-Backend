@@ -130,6 +130,37 @@ The sample is small (2 + 1 + 2 runs). It is still enough to stop asserting the o
 - **The trigger test's pass bar was not pre-registered.** The 3/3 and 0/2 bar for the live trigger test lived in a private plan file. It was never committed before the run, so that test was effectively judged after the fact. The follow-up review batch below fixed this, since its bar was committed in 180fda4 before any run.
 - **Scoring was not blind.** One scorer graded every run knowing the hypotheses, and that scorer is the same model family as the models under test. Every deciding line is quoted from the verbatim output, so each call can be checked, but no independent second rater was used. This is the largest uncontrolled bias in the batch.
 
+## Results — with the skill on Claude 5 (2026-11-22)
+
+This is the GREEN half of the 2026-11 batch. It used the same scenarios and the same Sonnet 5.5, with SKILL.md read first, and the delivery rule was committed before any run ([*Pre-registered*](#pre-registered-with-skill-green-runs-on-claude-5)). There were 7 runs, verbatim in [`runs/2026-11-green/`](runs/2026-11-green/). Each transcript shows exactly one Read, of `SKILL.md`, and one Write.
+
+| Habit | Baseline Correct | **With skill Correct** | Delivered (≥ 80%)? |
+| --- | --- | --- | --- |
+| 1 Version the route | 0 / 7 | **7 / 7** | **yes** |
+| 2 Feature flags | 0 / 7 | **0 / 7**: declined in every run | **no** |
+| 3 Circuit breaker | 3 / 6 | **3 / 6**: products 3/3, charges 0/3 | **no** |
+| 4 Deadline on every I/O | 0 / 7 | **7 / 7**: the database was bounded every time | **yes** |
+| 5 Off the request path | 0 / 3 | **0 / 3**: Present 3/3, never durable | **no** |
+| 6 Business counters | 0 / 7 | **7 / 7** | **yes** |
+| 7 Tombstone-aware reads | 2 / 3 | **3 / 3** | **yes** |
+
+**The skill works for four habits and falls short on three.** Habits 1, 4, 6 and 7 go from nearly absent to Correct in every run. Those include the two strongest baseline gaps, the database deadline and counters. The three shortfalls have one shared cause: in each, the model followed the text of the habit, and the text stops short of what the rubric requires.
+
+- **Habit 2: flags were declined in all 7 runs.**
+  - The charges runs gave the reason *"new endpoint, no old path to fall back to"*.
+  - The habit's only example is a V1-to-V2 swap. Its skip clause covers only *"no behavioral surface"*, which does not cover a new endpoint.
+  - The model treated a flag as a way to switch between two paths. It did not treat it as a kill switch for a new one.
+- **Habit 3: the charges breakers trip on card declines.**
+  - In all three charges runs, every provider error calls `failure()`, including a decline. A wave of declines from a healthy provider would open the breaker and take the endpoint down.
+  - The habit text never mentions which failures count. The Claude 4-generation GREEN runs made this distinction unprompted; Sonnet 5.5 does not.
+- **Habit 5: the receipt left the request path but not durably.**
+  - All three charges runs used a detached `void ... .catch()`, and each noted it would use a queue if one existed. The spec provides only `db` and `mailer`.
+  - The habit's only example is `queue.enqueue`. Nothing tells the model that an outbox row in the existing database is the durable option when there is no queue.
+
+**No over-application.** No run put a breaker on the database. The only idempotency lookup that addressed tombstones explicitly left them unfiltered, and the delete run declined a breaker with the correct skip reason.
+
+**Consequence, per the pre-registration:** habits 2, 3 and 5 are **wording revision candidates**. Nothing has been revised yet. Any revision must re-run this batch before it ships.
+
 ## Results — smaller model
 
 > **Generation note.** This section describes a Claude 4-generation Haiku-class model. Haiku 5.5 behaves differently on the cut practices; see *Results — 2026-11 (Claude 5)*.
@@ -339,5 +370,5 @@ Written on 2026-11-22, after both follow-ups were scored and **before any GREEN 
 - **Small n.** At most 7 runs per tier per generation. That is enough to separate 0/7 from 7/7 with confidence. It is not enough for fine distinctions; habits 5 and 7 have only 3 applicable frontier runs each in 2026-11.
 - **Presence, not quality, before 2026-08.** See *Where we were wrong* #4. Everything from 2026-08 onward is rubric-scored.
 - **Baseline agents could see the skill's name and description.** Every batch since 2026-07 ran in a harness whose skill list included this skill, though no baseline loaded it. That exposure can only push baselines *up*, so it cannot have hidden a habit the model misses. It does weaken any future *"now reflexive"* result, which should be confirmed with the plugin uninstalled before a cut.
-- **No Claude 5 GREEN runs yet.** The 2026-11 batch shows the habits are still missing without the skill. It does not yet show that the skill supplies them on this generation; the trigger runs that loaded the skill are suggestive but uncontrolled.
+- **The Claude 5 GREEN batch is small.** It has 7 runs, and habits 5 and 7 have 3 applicable runs each. It is enough to separate 0/7 from 7/7 and to locate three wording gaps; it is not enough for fine distinctions.
 - **GREEN runs were instructed to apply the skill.** That proves the content is inducible. Triggering is measured separately (see *Does it fire?*), and since 2026-11 against the live plugin runtime with n=5. A review-shaped prompt did not trigger it.
