@@ -2,7 +2,7 @@
 
 This skill ships only habits an AI assistant **fails to apply on its own**. That claim is worthless unless you can check it, so this directory holds the protocol, the exact prompts, the results, and the places our own method was wrong.
 
-> **Evidence last refreshed: 2026-08-11** — Claude frontier and Haiku-class.
+> **Evidence last refreshed: 2026-11-22** — Claude Sonnet 5.5 (frontier) and Haiku 5.5. Previous refresh: 2026-08-11, Claude 4 generation.
 > Run records are in [`runs/`](runs/README.md). This date matters: see *When to re-measure*.
 
 ## Protocol
@@ -68,7 +68,68 @@ The products run bounded `db.products.findAll()`, built a circuit breaker with a
 
 Two honest reads of the same data: either frontier behaviour has moved since the original batch, or run-to-run variance was always higher than aggregate counts revealed. This batch cannot distinguish them, and both argue for the same next step — re-measure 3, 4, 6, and 7 at higher n before deciding.
 
+The next section did exactly that, on the next model generation.
+
+## Results — 2026-11 (Claude 5)
+
+A pre-registered batch: the batch definition and the cut rule were committed before any run was scored (see [*Pre-registered*](#pre-registered-the-2026-11-re-measurement)). It covers 12 neutral baselines, all verbatim in [`runs/2026-11-remeasure/`](runs/2026-11-remeasure/). These numbers are **never pooled** with the Claude 4 generation results above.
+
+### Frontier — Sonnet 5.5, 7 runs
+
+| Habit | Present or better | **Correct** | Cut rule (Correct in ≥ 80% of ≥ 5) |
+| --- | --- | --- | --- |
+| 1 Version the route | 0 / 7 | **0 / 7** | stays |
+| 2 Feature flags | 0 / 7 | **0 / 7** | stays |
+| 3 Circuit breaker | 3 / 6 | **3 / 6**: products 3/3, charges 0/3 | stays |
+| 4 Deadline on every I/O | 6 / 7 | **0 / 7**: the database was unbounded in every run | stays |
+| 5 Off the request path | 1 / 3 | **0 / 3**: the one Present was a floating promise | stays; extra runs not triggered |
+| 6 Business counters | 0 / 7 | **0 / 7**: not one metrics call | stays |
+| 7 Tombstone-aware reads | 2 / 3 | **2 / 3** | stays; n < 5, extra runs not triggered |
+
+**Nothing is cut.** The skill is unchanged.
+
+**The 2026-08 weakening did not replicate.**
+
+- That batch made habit 6 the leading cut candidate. On Sonnet 5.5 it is absent in all seven runs.
+- That batch's products run bounded the database. Here all seven runs leave it unbounded, which is the canonical failure the habit was written for.
+- Only the breaker held up: Sonnet 5.5 builds a correct one around a dependency the task calls "sometimes slow" (3/3), and never around a payment provider the task does not flag (0/3). That is the Part 2 pattern exactly: present when the task cues it.
+
+The 2026-08 products run now looks like the variance read was right: one unusually thorough run, not a shift in behaviour. Habits 1 and 2 are now absent in **16 of 16** neutral frontier baselines across two model generations.
+
+### Smaller tier — Haiku 5.5, 5 runs
+
+| Habit | Present or better | Correct |
+| --- | --- | --- |
+| 1, 2, 3, 6 | 0 of every applicable run | 0 |
+| 4 Deadline on every I/O | 4 / 5 | 0 / 5 |
+| 5 Off the request path | 0 / 2 | 0 / 2 |
+| 7 Tombstone-aware reads | 0 / 2 | 0 / 2 |
+
+On the cut practices, **Haiku 5.5 does not repeat the Claude 4-generation failures** described under *Results — smaller model*:
+
+- **Idempotency:** the key was required in 2/2 runs, and neither failed open. One run claimed the key before charging (Correct). The other relied on the provider to dedupe (Present).
+- **Soft delete:** 1/1, applied correctly.
+- **Degradation:** 2/2 Correct. Unknown stock stays `null` / `"unknown"` and is never collapsed to `0`.
+
+The sample is small (2 + 1 + 2 runs). It is still enough to stop asserting the old smaller-tier warning for this model.
+
+### A frontier Present-but-not-Correct, on a cut practice
+
+[CONTRIBUTING](../CONTRIBUTING.md) says a frontier Present-but-not-Correct ships. This batch produced the first one, so it is recorded here rather than buried.
+
+- **What we saw:** idempotency reached Correct in 1 of 3 Sonnet 5.5 charges runs. The other two required the key and forwarded it to the provider, but never claimed it in their own store before the charge. One looked the key up and inserted afterwards, so two concurrent first requests both reach the provider.
+- **Why it ships nothing yet:** both runs stated an assumption the spec does not support, that the provider dedupes on the key. Under that assumption no money is lost, so this is a gap in the letter of [`RUBRIC.md`](RUBRIC.md), not yet a demonstrated failure.
+- **How it gets settled:** a scenario whose provider client explicitly has *no* idempotency support. If a frontier model still leans on the provider there, the habit ships. This is open work.
+
+### Deviations from the pre-registration
+
+- **Run date.** The batch was pre-registered on 2026-11-19 and run on 2026-11-22.
+- **Isolation mechanism.** The harness could not start agents in a different directory. Each agent was instead allowed exactly one tool call, a Write of its answer to a scratch directory. The transcripts confirm no agent read, listed, or searched any file, and none loaded a skill. This is stricter than the registered mechanism, but it is a change.
+- **A capture gap.** One agent (Haiku 5.5, delete) skipped the Write and returned its answer as a message. That message was extracted from the transcript programmatically; its record says so.
+
 ## Results — smaller model
+
+> **Generation note.** This section describes a Claude 4-generation Haiku-class model. Haiku 5.5 behaves differently on the cut practices; see *Results — 2026-11 (Claude 5)*.
 
 The table above describes a frontier model. We re-ran the same three neutral scenarios on a small, fast model (Haiku-class, 4 runs) to see whether the cuts generalise.
 
@@ -124,7 +185,23 @@ Sensitivity 2/2, specificity 1/1, against the real registry rather than a curate
 - **The agents' working directory was this repo.** A repo named for the skill plausibly primes selection toward it. That cuts against the two positives — but it makes the control *stronger*, since the priming worked against abstention and it abstained anyway with explicit reasoning.
 - **The `POST /orders` run also read [`RUBRIC.md`](RUBRIC.md) and the run artifacts**, and credited them for the stricter bar it applied ("why the breaker ignores business rejections, why fulfilment goes to a durable outbox rather than a floating promise"). Its output quality is therefore *skill + rubric + artifacts*, not the skill alone. The trigger result stands; the quality is not skill-attributable.
 
-A clean version of this test runs from a directory unrelated to this repo, with the eval material out of reach.
+### Live registry, clean (2026-11-22)
+
+Re-run on Sonnet 5.5 with both confounds closed. Every prompt told the agent the working directory was unrelated and not to read it, and the transcripts confirm none did. Verdicts come from the actual `Skill` tool calls in each transcript, not from the agent's report: [`runs/2026-11-remeasure/trigger-test.md`](runs/2026-11-remeasure/trigger-test.md).
+
+| Task | Loaded clean-backend? |
+| --- | --- |
+| `POST /orders/:id/cancel` with a refund | **yes** |
+| *"Is this ready for production? Review it"* followed by a 6-line handler | **no** |
+| Queue worker calling an external geocoder | **yes** |
+| React tag-input component (control) | no |
+| CSS sticky footer (control) | no |
+
+**Sensitivity 2/3, specificity 2/2. This misses the 3/3 bar the plan set.**
+
+- **The miss:** a terse review prompt with pasted code and no backend vocabulary. The 2026-08 review prompt that did trigger named a "payments service" and a "production-readiness review".
+- **What it suggests:** selection is reliable when the task is to *write* backend code, and weaker for an unadorned review.
+- **What happens next:** one prompt is not enough to justify changing the description. That waits for a review-shaped batch.
 
 ## Does it over-apply?
 
@@ -161,6 +238,10 @@ Published because a method you can't see the failures of isn't evidence.
 2. **Two prompts leaked their own answers.** A delete task that mentioned a "Trash / restore feature" and a rollout task that asked "how I shipped this safely" both told the model what to reach for. Soft-delete and feature-flags briefly looked reflexive as a result. The delete scenario was re-run neutrally (soft-delete: still reflexive on frontier, 2/2); the rollout scenario's flag result was discarded in favour of the neutral baselines, where flags appear 0/7.
 3. **Our first classification was too clean.** We initially called it a tidy six-versus-six split. The neutral re-runs showed the real line is not "can versus can't" — the model can do all of it — but **"never" versus "only when the task cues it."** That distinction produced the two-part structure.
 4. **We scored presence, not correctness.** Every verdict in the tables above asks "did the practice appear," not "was it implemented correctly." On the frontier model the distinction rarely mattered; the implementations were genuinely good. On a smaller model it is the entire story — a fail-open idempotency check and a stock field that reads `0` for "unknown" both *appear* as ticked boxes and are both wrong in ways that cost money. [`RUBRIC.md`](RUBRIC.md) now grades Absent / Present / Correct, with every correctness criterion drawn from a failure we actually observed. The tables above predate it and remain presence-scored; re-scoring them is open work.
+5. **Two runs nearly moved us.**
+   - A single thorough frontier run in 2026-08 made habit 6 look ready to cut, and three more habits look weak. We wrote that up as *"significantly weakened."*
+   - The pre-registered n=7 batch in 2026-11 found habit 6 absent in every run.
+   - We did not cut at n=2, and that restraint is the only reason the skill is still intact. The cut threshold is now committed before results are seen.
 
 ## Re-running it
 
@@ -203,9 +284,26 @@ Written and committed on 2026-11-19, **before any 2026-11 run was scored**, so t
 - **Isolation:** agents run from a directory unrelated to this repo and are told not to read repo files, so they cannot see the skill, rubric, or earlier runs.
 - **Cut rule:** a shipped habit is cut if its **Sonnet 5.5** baseline scores **Correct in at least 80% of at least 5 applicable runs**. Present-but-not-Correct counts as not Correct. Haiku results never trigger a cut.
 
+### Pre-registered: two follow-ups to the 2026-11 batch
+
+Written on 2026-11-22, after the 2026-11 batch was scored and **before either follow-up was run**. Both follow-ups use Sonnet 5.5, with the same isolation as that batch: each agent's transcript must show no Read, Glob, Grep, or Bash call. Both settle questions that batch left open.
+
+**A. Idempotency without provider dedupe.**
+
+- **Scenario:** [`scenarios/charges-no-dedupe.md`](scenarios/charges-no-dedupe.md), run ×5. It is the charges prompt plus one line stating that the provider does not deduplicate.
+- **Rule:** idempotency **becomes a habit candidate** if it scores Correct in **fewer than 4 of 5** runs. This mirrors the cut rule: a practice the frontier model gets right less than 80% of the time belongs in the skill.
+- **If it becomes a candidate:** it is drafted as a habit and must pass a GREEN run before it ships. It does not ship on this baseline alone.
+- **If it scores Correct in 4 or 5:** the 2026-11 observation is closed as an artifact of the provider assumption, and CONTRIBUTING is updated to say so.
+
+**B. Review-shaped trigger prompts.**
+
+- **Scenario:** [`scenarios/review-trigger.md`](scenarios/review-trigger.md): 6 backend review prompts at three vocabulary levels, plus 2 controls, one run each.
+- **Pass:** the skill loads on **at least 5 of 6** backend prompts and **0 of 2** controls.
+- **If it fails:** the description becomes a revision candidate. Any revised description must re-run this batch, and the earlier trigger prompts, before it ships. Results are reported per vocabulary level either way.
+
 ## Caveats
 
-- **One model family, two tiers, one point in time.** Frontier results come from a current frontier Claude; the smaller-model results from a Haiku-class model. Other vendors are untested.
-- **Small n.** 7 neutral frontier baselines and 4 smaller-model runs are enough to separate 0/7 from 7/7 with confidence; they are not enough for fine distinctions.
-- **Presence, not quality.** See *Where we were wrong* #4.
-- **GREEN runs were instructed to apply the skill.** That proves the content is inducible. Triggering was measured separately (see *Does it fire?*), but via a menu-selection proxy rather than the live plugin runtime.
+- **One model family, two generations, two tiers.** Every result is Claude. Other vendors are untested.
+- **Small n.** At most 7 runs per tier per generation. That is enough to separate 0/7 from 7/7 with confidence. It is not enough for fine distinctions; habits 5 and 7 have only 3 applicable frontier runs each in 2026-11.
+- **Presence, not quality, before 2026-08.** See *Where we were wrong* #4. Everything from 2026-08 onward is rubric-scored.
+- **GREEN runs were instructed to apply the skill.** That proves the content is inducible. Triggering is measured separately (see *Does it fire?*), and since 2026-11 against the live plugin runtime with n=5. A review-shaped prompt did not trigger it.

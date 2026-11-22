@@ -24,7 +24,7 @@ A habit ships when **the model that will run it** fails to apply it correctly. T
 
 "Present but not Correct" is not a new *kind* of habit — it is the same habit measured better. Idempotency looked reflexive under presence-scoring; under the rubric it is reflexive on frontier and unsafe on smaller models. The right response to that was re-scoring, not new content.
 
-No frontier Present-but-not-Correct has been observed yet. If you find one, it ships.
+The first frontier Present-but-not-Correct appeared in 2026-11, on idempotency (2 of 3 Sonnet 5.5 runs). It has not shipped, because the gap only costs money if the payment provider does not dedupe on the key, and both runs stated that assumption. A scenario that removes the assumption will settle it; see [evals/](evals/README.md#a-frontier-present-but-not-correct-on-a-cut-practice). If you find one that fails without such an assumption, it ships.
 
 ### Wanted: other model families
 

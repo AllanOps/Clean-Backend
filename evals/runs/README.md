@@ -17,6 +17,7 @@ The earliest runs predate this directory and exist only as attested records; tha
 | --- | --- | --- |
 | [`2026-07-attested/`](2026-07-attested/) | 7 frontier baselines, 4 Haiku baselines, 4 trigger tests, 2 over-application runs | attested |
 | [`2026-08-rubric-batch/`](2026-08-rubric-batch/) | 4 neutral baselines (charges + products × frontier + Haiku), scored with the rubric | verbatim |
+| [`2026-11-remeasure/`](2026-11-remeasure/) | 12 pre-registered neutral baselines (Sonnet 5.5 ×7, Haiku 5.5 ×5) + 1 live trigger test (5 prompts) | verbatim; trigger test transcript-checked |
 
 ## Capture protocol
 

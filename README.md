@@ -28,17 +28,17 @@ API versioning, feature flags, circuit breakers **never appeared in a single neu
 We then went looking for an eighth habit in the two shapes most likely to hide one — a column rename on a hot table, and a webhook receiver. Both came back empty. Seven is the whole set at this resolution.
 
 > [!IMPORTANT]
-> **The cuts were measured on a frontier model.** Re-running the same scenarios on a small, fast model, two of them do not hold: it hard-deleted rows instead of tombstoning, and its idempotency was either missing or **failed open** on a money endpoint. If you run this skill against a smaller model, don't assume those. The seven habits below are needed on both tiers — more so on the smaller one.
+> **The cuts were measured on a frontier model.** A Claude 4-generation Haiku-class model broke two of them: it hard-deleted rows instead of tombstoning, and its idempotency was either missing or **failed open** on a money endpoint. Haiku 5.5 did neither in our 2026-11 runs, but the sample is small. If you run this skill against an older or non-Claude small model, don't assume those two. The seven habits below are needed on every model we have measured.
 
 The full protocol, every prompt, both scorecards, the run records, the empty eighth-habit hunt, and the four places our own methodology was wrong: **[evals/](evals/README.md)**.
 
-**Evidence last refreshed: 2026-08-11** (Claude frontier and Haiku-class). That date is part of the claim — models improve, and a habit that becomes reflexive gets cut. See [when we re-measure](evals/README.md#when-to-re-measure).
+**Evidence last refreshed: 2026-11-22** (Claude Sonnet 5.5 and Haiku 5.5, pre-registered; nothing cut). That date is part of the claim — models improve, and a habit that becomes reflexive gets cut. See [when we re-measure](evals/README.md#when-to-re-measure).
 
 ---
 
 ## See it in action
 
-Seven neutral baselines. A charge endpoint, a product listing, a delete endpoint. Not one of them versioned the route:
+Sixteen neutral frontier baselines across two model generations: charge endpoints, product listings, delete endpoints. Not one of them versioned the route:
 
 ```ts
 // What a fresh model writes, every time:
