@@ -39,18 +39,24 @@ with it.
 ### 2. Deploying is not releasing
 
 ```TypeScript
-// Measured: the new path ships live to everyone at once.
-return renderCheckoutV2(cart);
+// Measured: a new money-moving endpoint ships live, with no way to turn it off.
+router.post('/api/v1/charges', createCharge);
 
-// Put the risky path behind a switch you can flip without a deploy.
-if (flags.checkoutV2.on(user)) return renderCheckoutV2(cart);
-return renderCheckoutV1(cart);
+// A kill switch, read on every request, that you can flip without a deploy.
+router.post('/api/v1/charges', (req, res) =>
+  flags.isOn('charges.enabled')
+    ? createCharge(req, res)
+    : res.status(503).set('Retry-After', '60').json({ error: 'temporarily disabled' }));
 ```
 
-Rollback becomes a config change instead of an emergency deploy at 3am.
+A path that moves money or changes state in another service ships behind a kill
+switch, including a brand-new endpoint with no old path to fall back to. Off
+means a clean 503 instead of an emergency deploy at 3am. When you replace an
+existing path, gate the new version and keep the old one as the fallback.
 
-**Skip it when** the change has no behavioral surface — a pure refactor or a typo
-fix. Flagging those only creates flag debt.
+**Skip it when** the path only reads, or only writes your own database, or the
+change has no behavioral surface — a pure refactor or a typo fix. Flagging those
+only creates flag debt.
 
 ### 3. Break the circuit before you retry
 
@@ -61,11 +67,23 @@ while (!ok) await inventory.get(id);
 // Fail fast once the dependency is known-sick.
 if (breaker.isOpen()) return fallback();
 if (!bucket.take())   return backoff();
-return inventory.get(id);
+
+// Count only transport failures toward opening it.
+try {
+  const result = await provider.charge(req);
+  breaker.recordSuccess();
+  return result;
+} catch (err) {
+  if (isDecline(err) || isClientError(err)) breaker.recordSuccess(); // the dependency answered
+  else breaker.recordFailure();                                      // timeout, reset, 5xx
+  throw err;
+}
 ```
 
 Retrying into a struggling dependency is how one slow service becomes two dead
-ones.
+ones. A card decline, a 4xx, or a not-found is a healthy dependency saying no;
+counting it lets a wave of declines take your endpoint down while the provider
+is fine.
 
 **Skip it when** the call has no downstream service. A breaker around your own
 primary database usually converts a slow query into an outage.
@@ -96,10 +114,19 @@ await mailer.sendReceipt(customerId, chargeId);
 
 // Hand it to a worker and return the receipt now.
 await queue.enqueue('receipt.send', { customerId, chargeId });
+
+// No queue in reach? Your database is one: write an outbox row in the same
+// transaction as the record, and let a worker drain it.
+await db.transaction(async (tx) => {
+  await tx.charges.insert(row);
+  await tx.outbox.insert({ type: 'receipt.send', payload: { customerId, chargeId } });
+});
 ```
 
 Email, PDFs, webhooks, search indexing, thumbnails — none of it belongs in the
-response.
+response. A detached promise (`void send().catch(log)`) leaves the request path
+but not durably: a restart loses it, so it is the inline call with the failure
+hidden.
 
 ### 6. Emit the counter, not just the log line
 

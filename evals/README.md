@@ -364,6 +364,36 @@ Written on 2026-11-22, after both follow-ups were scored and **before any GREEN 
 - **Over-application:** applying a habit where its skip condition holds, or where the rubric marks it wrong, is recorded as a failure. Examples are a breaker on the primary database and a tombstone filter on an idempotency lookup.
 - **If a habit is not delivered:** its wording in SKILL.md becomes a revision candidate. Any revision must re-run this batch before it ships. Results are reported per habit next to the 2026-11 baseline, never pooled with it.
 
+### Pre-registered: GREEN re-run of the revised habits 2, 3 and 5
+
+Written on 2026-11-22, after the first Claude 5 GREEN batch was scored and **before any run against the revised text**. The skill under test is the SKILL.md committed together with this section:
+
+- **Habit 2** now requires a kill switch on any path that moves money or changes state in another service, including a brand-new one. It may be skipped for reads and own-database-only writes.
+- **Habit 3** now states that only transport failures open the breaker.
+- **Habit 5** now names an outbox row in the same transaction as the fallback when no queue is in reach.
+
+**Runs.** All on Sonnet 5.5, with the same isolation as before: one Read of `SKILL.md`, one Write.
+
+- **The original seven GREEN runs:** the same scenarios and the same GREEN prompts, verbatim.
+- **Three held-out runs** of [`scenarios/ship-order.md`](scenarios/ship-order.md), GREEN variant. This scenario was written after the revision and never used to draft it.
+
+**Pass rule.** Both must hold:
+
+1. **No regression.** Every one of the seven habits scores Correct in at least 80% of applicable runs across the original seven. Habits 1, 4, 6 and 7 are included, so the revision cannot buy 2, 3 and 5 at their expense.
+2. **Generalisation.** Habits 2, 3 and 5 score Correct in 3 of 3 held-out runs.
+
+**Scoring habit 2 under the new text.**
+
+- On charges and ship-order, Correct means a runtime flag that gates the money-moving or external call.
+- On products and delete-document, the skip clause now applies, so declining is Correct and adding a flag is over-application.
+- The products and delete gains on habit 2 are therefore partly a change of definition. They are reported separately from the charges and ship-order result.
+
+**On 100%.** 100% is a stated aim, not the bar.
+
+- If the batch passes at 80% but not 100%, the wording is **not** tuned further against these same ten prompts. That would fit the skill to its own test.
+- Any further revision needs a fresh held-out scenario.
+- If the batch fails, the habit goes back for another revision with its own pre-registration.
+
 ## Caveats
 
 - **One model family, two generations, two tiers.** Every result is Claude. Other vendors are untested.
