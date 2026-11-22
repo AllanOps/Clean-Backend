@@ -159,7 +159,38 @@ This is the GREEN half of the 2026-11 batch. It used the same scenarios and the 
 
 **No over-application.** No run put a breaker on the database. The only idempotency lookup that addressed tombstones explicitly left them unfiltered, and the delete run declined a breaker with the correct skip reason.
 
-**Consequence, per the pre-registration:** habits 2, 3 and 5 are **wording revision candidates**. Nothing has been revised yet. Any revision must re-run this batch before it ships.
+**Consequence, per the pre-registration:** habits 2, 3 and 5 became **wording revision candidates**. Any revision must re-run this batch before it ships.
+
+### Re-run with the revised habits 2, 3 and 5 — fails on habit 4
+
+The habits were revised in eb7d2e2 and re-run under the rule committed in the same commit ([*Pre-registered*](#pre-registered-green-re-run-of-the-revised-habits-2-3-and-5)). The batch was the original seven GREEN runs plus three runs of a held-out scenario, [`ship-order`](scenarios/ship-order.md). All ten are verbatim in [`runs/2026-11-green-revised/`](runs/2026-11-green-revised/).
+
+| Habit | First GREEN (7) | **Revised, original seven** | **Held-out ship-order (3)** |
+| --- | --- | --- | --- |
+| 1 Version the route | 7 / 7 | **7 / 7** | 3 / 3 |
+| 2 Kill switch | 0 / 7 | **7 / 7**: charges 3/3 flagged; products and delete 4/4 skipped correctly | **3 / 3** |
+| 3 Circuit breaker | 3 / 6 | **6 / 6** | **3 / 3** |
+| 4 Deadline on every I/O | 7 / 7 | **5 / 7** | 3 / 3 |
+| 5 Off the request path | 0 / 3 | **3 / 3**: transactional outbox | **3 / 3** |
+| 6 Business counters | 7 / 7 | **7 / 7** | 3 / 3 |
+| 7 Tombstone-aware reads | 3 / 3 | **3 / 3** | 1 / 3 (not under test) |
+
+**Generalisation passes. No-regression fails, so the batch fails.**
+
+- **Habits 2, 3 and 5 work.** They score Correct in every applicable run, including all three held-out runs, which were never used to write them.
+  - Every charges and ship-order run gates the state-changing call behind a flag that is read per request.
+  - Every breaker treats declines, 4xx responses and `AddressRejectedError` as the dependency answering.
+  - Every notification goes through an outbox row written in the same transaction as the record.
+- **Habit 4 fell to 71%, and the habit 5 fix caused it.**
+  - Two charges runs went beyond the outbox row and also wrote the worker that drains it.
+  - That worker's `claimBatch`, `markDone` and `markRetry` database calls have no deadline.
+  - The rubric counts every process boundary, a worker's database included, so both runs score Present.
+  - The handlers themselves were fully bounded in all seven runs. Scoring only the request path would give 7/7, but the pre-registered rubric does not allow that reading.
+- **Habit 2 on products and delete is partly definitional.** Those runs score Correct by declining the flag, because the revised skip clause covers reads and own-database writes. The like-for-like gain is charges, which went from 0/3 to 3/3, and ship-order, at 3/3.
+- **Habit 7 on ship-order was not under test.** Two held-out runs read the order without a tombstone check. That habit was not revised and is outside this batch's pass rule. It is recorded here because a held-out task surfaced it.
+- **Retry.** The first dispatch of this batch failed on API timeouts and connection errors before any run wrote output. The batch was re-dispatched once with identical prompts.
+
+**Consequence.** The revision does not ship as is. The likely fix is one line in habit 5: the worker that drains the outbox needs the same deadlines as the handler. Per the pre-registration, that fix needs its own pre-registered re-run and a **fresh** held-out scenario, because ship-order has now been seen.
 
 ## Results — smaller model
 
