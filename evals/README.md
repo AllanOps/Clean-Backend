@@ -119,13 +119,16 @@ The sample is small (2 + 1 + 2 runs). It is still enough to stop asserting the o
 
 - **What we saw:** idempotency reached Correct in 1 of 3 Sonnet 5.5 charges runs. The other two required the key and forwarded it to the provider, but never claimed it in their own store before the charge. One looked the key up and inserted afterwards, so two concurrent first requests both reach the provider.
 - **Why it ships nothing yet:** both runs stated an assumption the spec does not support, that the provider dedupes on the key. Under that assumption no money is lost, so this is a gap in the letter of [`RUBRIC.md`](RUBRIC.md), not yet a demonstrated failure.
-- **How it gets settled:** a scenario whose provider client explicitly has *no* idempotency support. If a frontier model still leans on the provider there, the habit ships. This is open work.
+- **How it was settled:** a pre-registered follow-up, [`scenarios/charges-no-dedupe.md`](scenarios/charges-no-dedupe.md), adds one line stating that the provider does not deduplicate. Sonnet 5.5 scored **Correct in 5 of 5** runs ([records](runs/2026-11-followups/)). Every run claimed the key in its own unique-indexed store before calling the provider, refused the request when the store errored, and replayed completed keys. Several also recorded an ambiguous provider outcome as `unknown` and refused to re-charge it.
+- **Closed.** The 2026-11 gap was the model relying on a guarantee the spec left open, not a failure to implement idempotency. Idempotency stays cut on the frontier tier.
 
 ### Deviations from the pre-registration
 
 - **Run date.** The batch was pre-registered on 2026-11-19 and run on 2026-11-22.
 - **Isolation mechanism.** The harness could not start agents in a different directory. Each agent was instead allowed exactly one tool call, a Write of its answer to a scratch directory. The transcripts confirm no agent read, listed, or searched any file, and none loaded a skill. This is stricter than the registered mechanism, but it is a change.
 - **A capture gap.** One agent (Haiku 5.5, delete) skipped the Write and returned its answer as a message. That message was extracted from the transcript programmatically; its record says so.
+- **The trigger test's pass bar was not pre-registered.** The 3/3 and 0/2 bar for the live trigger test lived in a private plan file. It was never committed before the run, so that test was effectively judged after the fact. The follow-up review batch below fixed this, since its bar was committed in 180fda4 before any run.
+- **Scoring was not blind.** One scorer graded every run knowing the hypotheses, and that scorer is the same model family as the models under test. Every deciding line is quoted from the verbatim output, so each call can be checked, but no independent second rater was used. This is the largest uncontrolled bias in the batch.
 
 ## Results — smaller model
 
@@ -197,7 +200,24 @@ Re-run on Sonnet 5.5 with both confounds closed. Every prompt told the agent the
 | React tag-input component (control) | no |
 | CSS sticky footer (control) | no |
 
-**Sensitivity 2/3, specificity 2/2. This misses the 3/3 bar the plan set.**
+**Sensitivity 2/3, specificity 2/2. This misses the 3/3 bar the plan set.** That bar was not pre-registered; see *Deviations from the pre-registration*. The follow-up below settles it.
+
+### Review-shaped prompts (2026-11-22, pre-registered)
+
+Six backend review prompts at three vocabulary levels, plus two controls, with the pass bar committed before any run: [`scenarios/review-trigger.md`](scenarios/review-trigger.md), [record](runs/2026-11-followups/review-trigger.md).
+
+| Vocabulary | Backend prompts loading the skill |
+| --- | --- |
+| None ("Is this ready for production? Review it", "look this over before I merge") | 2 / 2 |
+| Some ("calls our pricing service", "background job worker") | 2 / 2 |
+| Many ("payment refund... Stripe", "rollout... on-call") | 2 / 2 |
+| Controls (React component, Python script) | 0 / 2 |
+
+**Sensitivity 6/6, specificity 2/2. Passes.**
+
+- **The earlier miss did not reproduce.** Its exact framing loaded the skill here, so the earlier miss reads as run-to-run selection variance, not a blind spot.
+- **Across both trigger runs that day:** 8 of 9 backend prompts loaded the skill, and 0 of 4 controls did.
+- **The description is unchanged.**
 
 - **The miss:** a terse review prompt with pasted code and no backend vocabulary. The 2026-08 review prompt that did trigger named a "payments service" and a "production-readiness review".
 - **What it suggests:** selection is reliable when the task is to *write* backend code, and weaker for an unadorned review.
@@ -306,4 +326,6 @@ Written on 2026-11-22, after the 2026-11 batch was scored and **before either fo
 - **One model family, two generations, two tiers.** Every result is Claude. Other vendors are untested.
 - **Small n.** At most 7 runs per tier per generation. That is enough to separate 0/7 from 7/7 with confidence. It is not enough for fine distinctions; habits 5 and 7 have only 3 applicable frontier runs each in 2026-11.
 - **Presence, not quality, before 2026-08.** See *Where we were wrong* #4. Everything from 2026-08 onward is rubric-scored.
+- **Baseline agents could see the skill's name and description.** Every batch since 2026-07 ran in a harness whose skill list included this skill, though no baseline loaded it. That exposure can only push baselines *up*, so it cannot have hidden a habit the model misses. It does weaken any future *"now reflexive"* result, which should be confirmed with the plugin uninstalled before a cut.
+- **No Claude 5 GREEN runs yet.** The 2026-11 batch shows the habits are still missing without the skill. It does not yet show that the skill supplies them on this generation; the trigger runs that loaded the skill are suggestive but uncontrolled.
 - **GREEN runs were instructed to apply the skill.** That proves the content is inducible. Triggering is measured separately (see *Does it fire?*), and since 2026-11 against the live plugin runtime with n=5. A review-shaped prompt did not trigger it.
