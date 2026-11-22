@@ -321,6 +321,18 @@ Written on 2026-11-22, after the 2026-11 batch was scored and **before either fo
 - **Pass:** the skill loads on **at least 5 of 6** backend prompts and **0 of 2** controls.
 - **If it fails:** the description becomes a revision candidate. Any revised description must re-run this batch, and the earlier trigger prompts, before it ships. Results are reported per vocabulary level either way.
 
+### Pre-registered: with-skill (GREEN) runs on Claude 5
+
+Written on 2026-11-22, after both follow-ups were scored and **before any GREEN run**. The 2026-11 baselines show the seven habits are still missing without the skill. This batch tests whether the skill supplies them on this generation.
+
+- **Model and runs:** Sonnet 5.5, matching the baseline mix one for one: charges ×3, products ×3, delete-document ×1.
+- **Prompt:** each scenario's **GREEN variant**, verbatim. That is the `FIRST: read skills/clean-backend/SKILL.md...` prefix followed by the unchanged baseline prompt. The baseline prompt's closing line tells the model not to read a skill, which contradicts the prefix. Earlier GREEN runs had the same wording, so it stays for comparability. A run that obeys the closing line and skips the skill is recorded as such.
+- **Isolation:** each agent may make exactly two tool calls: one Read of `skills/clean-backend/SKILL.md` and one Write of its answer. Its transcript must show no other file read and no other tool call.
+- **Scoring:** [`RUBRIC.md`](RUBRIC.md), Absent / Present / Correct. A habit declined because its own `Skip it when` condition actually holds, judged against the SKILL.md text, scores **Correct**, as the rubric already allows for versioning.
+- **Delivery rule:** a habit is **delivered** if it scores Correct in **at least 80% of applicable runs**. This is the same threshold as the cut rule, mirrored. With 3 applicable runs (habits 5 and 7), that means 3 of 3.
+- **Over-application:** applying a habit where its skip condition holds, or where the rubric marks it wrong, is recorded as a failure. Examples are a breaker on the primary database and a tombstone filter on an idempotency lookup.
+- **If a habit is not delivered:** its wording in SKILL.md becomes a revision candidate. Any revision must re-run this batch before it ships. Results are reported per habit next to the 2026-11 baseline, never pooled with it.
+
 ## Caveats
 
 - **One model family, two generations, two tiers.** Every result is Claude. Other vendors are untested.
