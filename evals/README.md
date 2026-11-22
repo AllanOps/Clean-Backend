@@ -193,6 +193,16 @@ Cutting is the success case, not a regression. The skill getting shorter as mode
 
 Report a result with the [re-measurement issue template](https://github.com/AllanOps/Clean-Backend/issues/new/choose) — including a result that argues for a cut.
 
+### Pre-registered: the 2026-11 re-measurement
+
+Written and committed on 2026-11-19, **before any 2026-11 run was scored**, so the rule cannot be fitted to the results.
+
+- **Trigger:** the Claude 5 family shipped after the 2026-08 refresh.
+- **Models:** Sonnet 5.5 (frontier tier, comparable to the earlier Sonnet-class records) and Haiku 5.5 (smaller tier). Results are reported per generation and never pooled with 2026-08.
+- **Runs:** neutral baselines from [`scenarios/`](scenarios/), prompts unchanged. Sonnet 5.5: charges ×3, products ×3, delete-document ×1. Haiku 5.5: charges ×2, products ×2, delete-document ×1. Habits 5 and 7 get two extra Sonnet runs each only if their first three are all Correct.
+- **Isolation:** agents run from a directory unrelated to this repo and are told not to read repo files, so they cannot see the skill, rubric, or earlier runs.
+- **Cut rule:** a shipped habit is cut if its **Sonnet 5.5** baseline scores **Correct in at least 80% of at least 5 applicable runs**. Present-but-not-Correct counts as not Correct. Haiku results never trigger a cut.
+
 ## Caveats
 
 - **One model family, two tiers, one point in time.** Frontier results come from a current frontier Claude; the smaller-model results from a Haiku-class model. Other vendors are untested.
