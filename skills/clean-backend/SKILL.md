@@ -116,7 +116,8 @@ await mailer.sendReceipt(customerId, chargeId);
 await queue.enqueue('receipt.send', { customerId, chargeId });
 
 // No queue in reach? Your database is one: write an outbox row in the same
-// transaction as the record, and let a worker drain it.
+// transaction as the record, and let a worker drain it. The worker's claim and
+// mark-done calls are I/O too: give them the same deadlines as the handler.
 await db.transaction(async (tx) => {
   await tx.charges.insert(row);
   await tx.outbox.insert({ type: 'receipt.send', payload: { customerId, chargeId } });

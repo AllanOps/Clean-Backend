@@ -425,6 +425,29 @@ Written on 2026-11-22, after the first Claude 5 GREEN batch was scored and **bef
 - Any further revision needs a fresh held-out scenario.
 - If the batch fails, the habit goes back for another revision with its own pre-registration.
 
+### Pre-registered: GREEN re-run of the habit 5 worker-deadline line
+
+Written on 2026-11-23, after the previous re-run failed on habit 4 and **before any run against the new text**.
+
+**The change.** One sentence added to habit 5's outbox example: *"The worker's claim and mark-done calls are I/O too: give them the same deadlines as the handler."* It is committed together with this section. Nothing else in SKILL.md changes. It targets the observed failure directly: two runs wrote an outbox drain worker whose database calls had no deadline.
+
+**Runs.** All on Sonnet 5.5, with the same isolation as before: one Read of `SKILL.md`, one Write.
+
+- **The original seven GREEN runs**, verbatim.
+- **Three runs of a fresh held-out scenario,** [`scenarios/send-invoice.md`](scenarios/send-invoice.md), GREEN variant. It was written after the change and is replacing ship-order, which has already been seen.
+
+**Pass rule.** Both must hold:
+
+1. **No regression.** Every one of the seven habits scores Correct in at least 80% of applicable runs across the original seven.
+2. **Generalisation.** Habits 2, 3, 4 and 5 score Correct in 3 of 3 held-out runs. Habit 4 is added because it is the one that regressed last time.
+
+**Scoring.**
+
+- Habit 4 counts every database and provider call the run writes, worker or drain code included.
+- Habit 2 is scored as before. Products and delete-document score Correct by declining the flag, and that gain is reported separately as definitional.
+
+**On 100%.** 100% remains the aim, not the bar. If the batch passes, the revision ships as is: no further wording changes are tuned against these prompts. If it fails, the next change needs its own pre-registration and another fresh held-out scenario.
+
 ## Caveats
 
 - **One model family, two generations, two tiers.** Every result is Claude. Other vendors are untested.
