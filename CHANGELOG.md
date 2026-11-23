@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.0.2](https://github.com/AllanOps/Clean-Backend/compare/v2.0.1...v2.0.2) (2026-11-23)
+
+
+### Bug Fixes
+
+* **skill:** deadlines on the outbox worker too ([a3b3d8c](https://github.com/AllanOps/Clean-Backend/commit/a3b3d8ccc5ff9845cf0db3531f90fdc2ca9d4b7a))
+* **skill:** kill switch for state-changing paths, transport-only breaker failures, outbox fallback ([eb7d2e2](https://github.com/AllanOps/Clean-Backend/commit/eb7d2e2bd000ca17d54e0d59b3d0f141ab6df1cf))
+
 ## [2.0.1](https://github.com/AllanOps/Clean-Backend/compare/v2.0.0...v2.0.1) (2026-08-12)
 
 
