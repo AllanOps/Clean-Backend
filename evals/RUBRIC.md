@@ -87,6 +87,8 @@ Not in the skill, but graded here because on a smaller model they failed — and
 
 *Observed:* a smaller-model run accepted `idempotencyKey?` as optional and, on a lookup error, logged a warning and charged anyway — describing it in its own summary as "graceful degradation." That is Present and actively unsafe.
 
+*Observed (frontier, 2026-11):* when the spec was silent about the provider, two of three Sonnet 5.5 runs forwarded the key to the provider and never claimed it themselves. Both are Present. When the spec stated that the provider does not deduplicate, 5 of 5 claimed the key before charging and failed closed. When scoring, check whether the run's safety rests on an assumption about a dependency, and name that assumption.
+
 ### Graceful degradation
 
 | | |
